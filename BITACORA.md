@@ -64,3 +64,38 @@ se aborde la calibración (Fase 2/3).
 
 **Referencias.** `src/ragcheck/models.py` (build_svm, build_knn);
 `scripts/compare_models.py`; `outputs/reports/e0_baseline.md`.
+
+---
+
+## [2026-07-01] Decisión — Grid search por modelo y evaluación en test oficial
+
+**Contexto.** Los hiperparámetros estaban fijos a mano. Siguiendo el molde del TFG
+de Sergio Gil (grid search por modelo maximizando F1), se añade búsqueda de
+hiperparámetros a cada script de modelo y una evaluación final en el test oficial.
+
+**Detalle.** `training.grid_search` usa `GridSearchCV` con `cv=GroupKFold` por
+`source` y `scoring="f1"` (misma partición honesta, sin fuga de documento; la
+propia `GroupKFold` exige `groups`, lo que garantiza que se usan). Cada script de
+modelo expone su `PARAM_GRID`, reporta la rejilla (top-5) y las métricas A–F del
+mejor, y guarda el modelo. El SVM se busca sin `probability` (F1 usa `predict`,
+mucho más rápido) y solo el ganador se reentrena con `probability=True`.
+
+Sesgo asumido y cómo se cierra: seleccionar hiperparámetros y reportar sobre los
+mismos folds de CV es levemente optimista (no es fuga, es sesgo de selección). El
+número **definitivo y defendible** se toma en el **test oficial** de RAGTruth
+(2 700 ejemplos intactos), vía `scripts/evaluate_test.py`.
+
+Resultados en test oficial (AUC-ROC, IC95%): XGBoost 0.821 [0.805, 0.837] >
+KNN 0.819 > RF 0.817 > SVM 0.795 > LogReg 0.793. Todos por encima del umbral 0.80
+de la hipótesis (salvo los dos lineales, muy cerca). El ECE empeora en test
+(0.07–0.11; LogReg 0.114): los modelos están sobre-confiados fuera de muestra, lo
+que motiva la calibración (Platt/isotónica) en la Fase 2.
+
+**Implicaciones para la memoria.** El capítulo de resultados sigue el arco
+línea base (parámetros por defecto, CV) → ajuste por grid search (CV) →
+evaluación final (test oficial), como en los TFG ejemplares. La calibración pasa
+a ser una palanca justificada por datos, no por intuición.
+
+**Referencias.** `src/ragcheck/training.py` (grid_search, top_configs);
+`src/ragcheck/report.py`; `scripts/{log_reg,knn,svm,random_forest,xgb}.py`;
+`scripts/evaluate_test.py`; `outputs/reports/test_oficial.md` y `<modelo>.md`.
