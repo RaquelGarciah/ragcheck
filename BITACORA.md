@@ -5,6 +5,50 @@ metodológicas, no el progreso trivial. Formato de cada entrada en `CLAUDE.md` �
 
 ---
 
+## [2026-07-01] Decisión — Features de nivel frase; LSA descartada por redundante
+
+**Contexto.** El diagnóstico por tarea mostró que el gap con el estado del arte
+(RAG-HAT 0,839 F1; Llama-2-13B 0,787; LettuceDetect 0,792, todos nivel respuesta)
+no era uniforme: Data2txt ya rozaba el SOTA (F1 0,83) y QA estaba en mitad de
+tabla, pero **Summary era el agujero** (AUC 0,676, casi azar). La causa: las cinco
+features originales miden solape léxico **respuesta-entera**, y una alucinación
+suele ser *una* frase sin respaldo que el promedio global diluye —justo el patrón
+de los resúmenes (paráfrasis incorrecta).
+
+**Detalle.** Se añaden dos bloques a `features.py`:
+- **Nivel frase** (`SENTENCE_FEATURES`, 6 columnas): se trocea la respuesta en
+  frases y se agrega el soporte de cada una contra la fuente con **mínimo, media,
+  desviación y fracción de frases mal sostenidas**. Dos señales por frase:
+  containment léxico y mejor coseno TF-IDF contra las frases de la fuente (TF-IDF
+  ajustado por par, sin fuga). El mínimo delata la frase peor sostenida.
+- **`task_type` one-hot** (`task_{QA,Summary,Data2txt}`): deja que el modelo
+  especialice por tarea. Solo se añade si la columna existe, para no romper el
+  contrato de `inference.score(response, source)`.
+
+Efecto (OOF GroupKFold, xgboost, hiperparámetros fijos): AUC global **0,804 →
+0,819**; por tarea Data2txt 0,763 → 0,793, QA 0,800 → 0,809, Summary 0,676 →
+0,702.
+
+**LSA descartada.** Se implementó y probó `LsaSimilarity` (TF-IDF + TruncatedSVD
+ajustado **por fold**, sin fuga, como manda §10). Aporte marginal nulo: AUC global
+0,819 → 0,820 y Summary 0,702 → **0,701** (plano/negativo). Las features de
+similitud TF-IDF a nivel frase ya capturan esa señal semántica, así que LSA es
+redundante. Se **elimina el código** (regla "sin código muerto") en vez de dejarlo
+inerte. Es un resultado negativo defendible ante el tribunal.
+
+**Implicaciones para la memoria.** El capítulo de features distingue ahora
+features respuesta-entera vs. **nivel frase**, y el arco de resultados puede
+mostrar el salto de Summary. La LSA aparece como vía **explorada y descartada con
+datos**, no omitida —refuerza el marco (el techo de las features de superficie en
+alucinación sutil). Pendiente: re-lanzar grid search + test oficial sobre el nuevo
+conjunto de features para actualizar las cifras citables (`e0_baseline.md`,
+`test_oficial.md`, `<modelo>.md`).
+
+**Referencias.** `src/ragcheck/features.py` (`_sentence_features`,
+`SENTENCE_FEATURES`, `TASKS`); `tests/test_features.py`.
+
+---
+
 ## [2026-07-01] Milestone — Estructura del proyecto definida
 
 **Contexto.** El repositorio estaba en verde (sin código Python, sin git) y con

@@ -3,6 +3,9 @@
 import pandas as pd
 
 from ragcheck.features import (
+    FEATURES,
+    SENTENCE_FEATURES,
+    _sentence_features,
     answer_len,
     containment,
     extract_features,
@@ -59,17 +62,61 @@ def test_features_deterministas():
         assert f(r, s) == f(r, s)
 
 
+def test_sent_features_caza_frase_sin_respaldo():
+    # Primera frase respaldada, segunda inventada de cero.
+    r = "The cat sat on the mat. Dragons rule the distant galaxy."
+    s = "The cat sat on the mat quietly."
+    f = _sentence_features(r, s)
+    # La frase peor sostenida arrastra el mínimo muy por debajo de la media.
+    assert f["sent_cont_min"] < f["sent_cont_mean"]
+    assert f["sent_frac_low"] == 0.5  # una de dos frases mal respaldada
+    assert f["sent_sim_min"] < f["sent_sim_mean"]
+
+
+def test_sent_features_respuesta_limpia_da_soporte_alto():
+    r = "The cat sat on the mat."
+    s = "The cat sat on the mat quietly in the sun."
+    f = _sentence_features(r, s)
+    assert f["sent_cont_min"] == 1.0  # todas las palabras están en la fuente
+    assert f["sent_cont_std"] == 0.0  # una sola frase, sin dispersión
+
+
+def test_sent_features_respuesta_vacia_neutra():
+    f = _sentence_features("", "algo de fuente")
+    assert f["sent_cont_min"] == 1.0 and f["sent_sim_min"] == 1.0
+    assert f["sent_frac_low"] == 0.0
+
+
+def test_sent_features_deterministas():
+    r, s = "One grounded line. A wholly invented line here.", "One grounded line only."
+    assert _sentence_features(r, s) == _sentence_features(r, s)
+
+
 def test_extract_features_esquema():
     df = pd.DataFrame(
-        {"response": ["the cat", "1999 aqui"], "source": ["the cat mat", "año 2020"]}
+        {
+            "response": ["the cat", "1999 aqui"],
+            "source": ["the cat mat", "año 2020"],
+            "task_type": ["QA", "Data2txt"],
+        }
     )
     feats = extract_features(df)
     assert list(feats.columns) == [
-        "containment",
-        "jaccard",
-        "tfidf_cos",
-        "num_overlap",
-        "answer_len",
+        *FEATURES,
+        *SENTENCE_FEATURES,
+        "task_QA",
+        "task_Summary",
+        "task_Data2txt",
     ]
     assert len(feats) == 2
     assert feats.index.equals(df.index)
+    # One-hot correcto: la primera fila es QA, la segunda Data2txt.
+    assert feats["task_QA"].tolist() == [1.0, 0.0]
+    assert feats["task_Data2txt"].tolist() == [0.0, 1.0]
+
+
+def test_extract_features_sin_task_type():
+    # Sin la columna task_type no se añaden las one-hot (contrato de inferencia).
+    df = pd.DataFrame({"response": ["the cat"], "source": ["the cat mat"]})
+    feats = extract_features(df)
+    assert list(feats.columns) == [*FEATURES, *SENTENCE_FEATURES]
