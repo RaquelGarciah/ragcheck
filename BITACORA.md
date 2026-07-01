@@ -5,6 +5,45 @@ metodológicas, no el progreso trivial. Formato de cada entrada en `CLAUDE.md` �
 
 ---
 
+## [2026-07-01] Decisión/Error — Features relacionales; el umbral max-F1 no generaliza
+
+**Contexto.** Tras el análisis de error (camuflaje léxico en Summary), se añaden
+features *relacionales* para cazar la recombinación que el solape de unigramas no
+ve, y se estudia cómo subir el F1.
+
+**Features relacionales.** `novel_bigram`/`novel_trigram` (n-gramas de la
+respuesta ausentes en la fuente), `num_context` (unidad del número: caza "26.2
+hours" frente a "26.2 miles") y `neg_diff` (inversión de polaridad). Efecto (OOF
+GroupKFold, xgboost): **Data2txt AUC 0,793 → 0,814**, global 0,819 → 0,824;
+`num_context` es la 3ª feature más importante (0,060). En test oficial: mejor AUC
+0,836 (RF), mejor F1 0,692 (SVM), frente a ~0,66 de F1 al inicio del trabajo.
+
+**Summary sigue bloqueada** (AUC 0,701): la novedad de n-gramas tampoco la mueve,
+ni a nivel frase (`sent_novel` probada y descartada por nula, como LSA). Motivo
+estructural: **resumir es recombinar**, así que la frase fiel y la alucinada de un
+resumen tienen la misma firma de recombinación; en Data2txt funciona porque lo
+fiel copia y lo inventado fabrica. Es el techo del clásico en alucinación sutil.
+
+**Error corregido — el umbral max-F1 no generaliza.** Se afirmó que fijar el
+umbral por max-F1 (en vez de Youden) daría ~+3 puntos de F1. **Falso fuera de
+muestra**: medido en las OOF de train era 0,724 vs 0,695, pero fijando el umbral
+en train y evaluando en test el orden se **invierte** (Youden 0,681 > max-F1
+global 0,674 > max-F1 por tarea 0,660). Causa: la prevalencia de train (0,445) ≠
+test (0,349); el umbral bajo que maximiza F1 en train es demasiado agresivo para
+el test. Decisión: **mantener Youden** y no vender el umbral como palanca de F1.
+
+**Implicaciones para la memoria.** (1) La métrica principal a reportar es el
+**AUC-ROC** (0,836, nivel de Vectara HHEM y rozando Lynx-8B), no el F1, que la
+prevalencia del test tiene medio capado. (2) Reportar F1 **por tarea** con la
+explicación del techo de Summary. (3) El episodio del umbral es material
+defendible: ilustra la diferencia entre métrica en muestra y fuera de muestra
+bajo cambio de prevalencia.
+
+**Referencias.** `src/ragcheck/features.py` (novel_bigram, novel_trigram,
+num_context, neg_diff); `outputs/reports/test_oficial.md`, `e0_baseline.md`.
+
+---
+
 ## [2026-07-01] Hallazgo — El cuello de botella de Summary es camuflaje léxico, no tipo sutil
 
 **Contexto.** Tras las features de nivel frase, Summary seguía siendo la tarea
