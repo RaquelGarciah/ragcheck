@@ -20,5 +20,15 @@ def set_style() -> None:
 
 
 def savefig(fig: plt.Figure, name: str) -> Path:
-    """Guarda la figura en `outputs/figures/<name>` en PNG y PDF a 300 dpi."""
-    raise NotImplementedError  # Fase 0
+    """Guarda la figura en `outputs/figures/<name>` en PNG y PDF a 300 dpi.
+
+    Devuelve la ruta del PNG. `name` va sin extensión.
+    """
+    from ragcheck.config import FIGURES_DIR
+
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    png = FIGURES_DIR / f"{name}.png"
+    fig.savefig(png)
+    fig.savefig(FIGURES_DIR / f"{name}.pdf")
+    plt.close(fig)
+    return png

@@ -7,6 +7,8 @@ con los hiperparámetros de `config`.
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import Pipeline, make_pipeline
+from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 from xgboost import XGBClassifier
 
@@ -34,14 +36,22 @@ def build_random_forest() -> RandomForestClassifier:
     return RandomForestClassifier(**RANDOM_FOREST_PARAMS)
 
 
-def build_svm() -> SVC:
-    """Máquina de vectores soporte con núcleo RBF (Cortes y Vapnik, 1995)."""
-    return SVC(**SVM_PARAMS)
+def build_svm() -> Pipeline:
+    """SVM de núcleo RBF (Cortes y Vapnik, 1995) con estandarizado previo.
+
+    El escalado es imprescindible: sin él, `answer_len` domina el núcleo RBF
+    frente a las features en [0, 1].
+    """
+    return make_pipeline(StandardScaler(), SVC(**SVM_PARAMS))
 
 
-def build_knn() -> KNeighborsClassifier:
-    """K vecinos más cercanos (Cover y Hart, 1967)."""
-    return KNeighborsClassifier(**KNN_PARAMS)
+def build_knn() -> Pipeline:
+    """K vecinos más cercanos (Cover y Hart, 1967) con estandarizado previo.
+
+    El escalado es imprescindible: la distancia euclídea la dominaría
+    `answer_len` sin normalizar.
+    """
+    return make_pipeline(StandardScaler(), KNeighborsClassifier(**KNN_PARAMS))
 
 
 # Registro nombre -> constructor, para iterar en los scripts de comparación.
