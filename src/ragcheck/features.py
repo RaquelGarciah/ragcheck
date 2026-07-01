@@ -14,14 +14,33 @@ from sklearn.metrics.pairwise import cosine_similarity
 _TOKEN = re.compile(r"[a-z0-9]+")
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
 _SENT = re.compile(r"[^.!?\n]+")
+# Tokeniza conservando los números decimales como una sola pieza ("26.2"), a
+# diferencia de _TOKEN. Necesario para los n-gramas y la consistencia numérica.
+_SEQ = re.compile(r"[a-z]+|\d+(?:[.,]\d+)?")
 
 # Tareas de RAGTruth; se codifican one-hot para que el modelo especialice.
 TASKS = ("QA", "Summary", "Data2txt")
+
+# Marcadores de negación en inglés; una polaridad invertida es señal de conflicto.
+_NEGATIONS = {
+    "not", "no", "never", "without", "nor", "none", "cannot",
+    "n't", "neither", "nothing", "nobody", "nowhere",
+}
 
 
 def _tokens(text: str) -> list[str]:
     """Tokeniza a minúsculas quedándose con secuencias alfanuméricas."""
     return _TOKEN.findall(text.lower())
+
+
+def _seq(text: str) -> list[str]:
+    """Secuencia de tokens con los decimales intactos (para n-gramas y números)."""
+    return _SEQ.findall(text.lower())
+
+
+def _ngrams(tokens: list[str], n: int) -> set[tuple[str, ...]]:
+    """Conjunto de n-gramas (tuplas) de una lista de tokens."""
+    return set(zip(*(tokens[i:] for i in range(n)))) if len(tokens) >= n else set()
 
 
 def _sentences(text: str) -> list[str]:
@@ -92,6 +111,64 @@ def num_overlap(response: str, source: str) -> float:
     return len(NR & NF) / len(NR)
 
 
+def novel_bigram(response: str, source: str) -> float:
+    """Fracción de bigramas de la respuesta ausentes en la fuente.
+
+    Caza la *recombinación*: palabras que sí están en la fuente pero unidas de
+    otra forma (p. ej. "26.2 hours" cuando la fuente dice "26.2 miles"). Es la
+    señal que el solape de unigramas —ciego al orden— no ve. Vale 0 si la
+    respuesta no llega a dos tokens.
+    """
+    RB = _ngrams(_seq(response), 2)
+    if not RB:
+        return 0.0
+    return len(RB - _ngrams(_seq(source), 2)) / len(RB)
+
+
+def novel_trigram(response: str, source: str) -> float:
+    """Fracción de trigramas de la respuesta ausentes en la fuente.
+
+    Versión más estricta de `novel_bigram`: exige tres palabras seguidas iguales.
+    Vale 0 si la respuesta no llega a tres tokens.
+    """
+    RT = _ngrams(_seq(response), 3)
+    if not RT:
+        return 0.0
+    return len(RT - _ngrams(_seq(source), 3)) / len(RT)
+
+
+def num_context(response: str, source: str) -> float:
+    """Fracción de números de la respuesta cuya unidad (token siguiente) está en la fuente.
+
+    La unidad va tras el número ("26.2 miles", "55 years"). Mira el bigrama
+    número→siguiente: caza cambios de unidad o atributo ("26.2 hours" frente a
+    "26.2 miles") que `num_overlap` —que solo mira el número aislado— deja pasar.
+    Un número al final de la respuesta no tiene unidad que contrastar y cuenta
+    como anclado. Vale 1 si la respuesta no tiene números.
+    """
+    seq = _seq(response)
+    idx = [i for i, t in enumerate(seq) if _NUMBER.fullmatch(t)]
+    if not idx:
+        return 1.0
+    FB = _ngrams(_seq(source), 2)
+    anchored = sum(
+        1 for i in idx if i + 1 >= len(seq) or (seq[i], seq[i + 1]) in FB
+    )
+    return anchored / len(idx)
+
+
+def neg_diff(response: str, source: str) -> float:
+    """Diferencia de densidad de negación entre respuesta y fuente.
+
+    Una alucinación de conflicto suele invertir la polaridad ("did not attend"
+    donde la fuente afirma). Positivo si la respuesta niega más que la fuente.
+    """
+    rt, ft = _tokens(response), _tokens(source)
+    dr = sum(t in _NEGATIONS for t in rt) / len(rt) if rt else 0.0
+    ds = sum(t in _NEGATIONS for t in ft) / len(ft) if ft else 0.0
+    return dr - ds
+
+
 def answer_len(response: str, source: str) -> float:
     """Longitud de la respuesta en tokens (la fuente no interviene)."""
     return float(len(_tokens(response)))
@@ -103,6 +180,10 @@ FEATURES = {
     "jaccard": jaccard,
     "tfidf_cos": tfidf_cos,
     "num_overlap": num_overlap,
+    "novel_bigram": novel_bigram,
+    "novel_trigram": novel_trigram,
+    "num_context": num_context,
+    "neg_diff": neg_diff,
     "answer_len": answer_len,
 }
 

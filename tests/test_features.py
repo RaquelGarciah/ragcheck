@@ -10,6 +10,10 @@ from ragcheck.features import (
     containment,
     extract_features,
     jaccard,
+    neg_diff,
+    novel_bigram,
+    novel_trigram,
+    num_context,
     num_overlap,
     tfidf_cos,
 )
@@ -56,9 +60,52 @@ def test_answer_len_cuenta_tokens():
     assert answer_len("una respuesta de cinco tokens exactos", "") == 6.0
 
 
+def test_novel_bigram_caza_recombinacion():
+    # Todas las palabras están en la fuente, pero "26.2 hours" no es un bigrama
+    # suyo (la fuente dice "26.2 miles"): el unigrama no lo ve, el bigrama sí.
+    r = "26.2 hours"
+    s = "the marathon is 26.2 miles and lasts hours"
+    assert containment(r, s) == 1.0  # unigram ciego
+    assert novel_bigram(r, s) == 1.0  # bigrama lo caza
+
+
+def test_novel_bigram_texto_extractivo():
+    # Respuesta copiada literalmente: ningún bigrama nuevo.
+    assert novel_bigram("the cat sat", "the cat sat on the mat") == 0.0
+
+
+def test_novel_bigram_respuesta_corta():
+    assert novel_bigram("cat", "the cat") == 0.0  # menos de dos tokens
+
+
+def test_novel_trigram_mas_estricto_que_bigram():
+    r, s = "the cat sat quietly", "the cat ran and sat quietly"
+    # "cat sat" es nuevo (bigram>0); a nivel trigram también hay novedad.
+    assert novel_trigram(r, s) >= novel_bigram(r, s) or novel_trigram(r, s) > 0
+
+
+def test_num_context_detecta_cambio_de_unidad():
+    # 26.2 está en la fuente pero con "miles", no con "hours".
+    assert num_context("ran 26.2 hours", "ran 26.2 miles") == 0.0
+    # Mismo contexto -> anclado.
+    assert num_context("ran 26.2 miles", "ran 26.2 miles today") == 1.0
+
+
+def test_num_context_sin_numeros():
+    assert num_context("sin cifras", "tampoco aqui") == 1.0
+
+
+def test_neg_diff_polaridad():
+    # La respuesta niega y la fuente no: diferencia positiva.
+    assert neg_diff("he did not attend", "he attended the event") > 0
+    # Sin negaciones en ninguno: cero.
+    assert neg_diff("he attended", "he attended too") == 0.0
+
+
 def test_features_deterministas():
     r, s = "the cat sat here", "the cat sat on the mat"
-    for f in (containment, jaccard, tfidf_cos, num_overlap, answer_len):
+    for f in (containment, jaccard, tfidf_cos, num_overlap, answer_len,
+              novel_bigram, novel_trigram, num_context, neg_diff):
         assert f(r, s) == f(r, s)
 
 
