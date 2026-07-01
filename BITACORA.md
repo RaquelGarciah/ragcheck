@@ -35,3 +35,32 @@ resultados, la comparativa de los cinco modelos con las secciones A–F.
 
 **Referencias.** `CLAUDE.md` §3, §6, §9; `GUIA_TFG_ALUCINACIONES.md` §7, §9;
 plan de estructura aprobado.
+
+---
+
+## [2026-07-01] Hallazgo — SVM y KNN exigen estandarizar las features
+
+**Contexto.** Primera comparativa de los cinco modelos (Fase 0) con las cinco
+features léxicas sobre el train completo (15 090 filas), GroupKFold por `source`.
+
+**Detalle.** Sin escalar, SVM daba AUC-ROC 0.656 (peor que el baseline trivial de
+`containment`, 0.761) y KNN 0.741. La causa es que `answer_len` (decenas o
+centenas de tokens) domina el núcleo RBF y la distancia euclídea frente a las
+cuatro features acotadas en [0, 1]. Al meter `StandardScaler` en el pipeline de
+SVM y KNN: SVM 0.656 → 0.792 y KNN 0.741 → 0.788. La regresión logística (0.769)
+y los árboles (RF 0.788, XGBoost 0.804) no dependen de la escala, por eso no se
+tocaron y la logística conserva la línea base ~0.78 de la viabilidad.
+
+Ranking E0 (AUC-ROC, IC95%): XGBoost 0.804 [0.798, 0.811] > SVM 0.792 >
+RF 0.788 ≈ KNN 0.788 > LogReg 0.769 > baseline containment 0.761.
+
+**Implicaciones para la memoria.** El capítulo de metodología debe justificar el
+preprocesado por modelo: escalado obligatorio en los métodos basados en distancia
+o margen, innecesario en los de árbol. Es un punto de rigor que el tutor valora.
+
+**Pendiente.** `SVC(probability=True)` está deprecado en scikit-learn 1.9 (se
+elimina en 1.11); migrar a `CalibratedClassifierCV(SVC(), ensemble=False)` cuando
+se aborde la calibración (Fase 2/3).
+
+**Referencias.** `src/ragcheck/models.py` (build_svm, build_knn);
+`scripts/compare_models.py`; `outputs/reports/e0_baseline.md`.
