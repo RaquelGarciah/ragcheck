@@ -1,23 +1,23 @@
 # logreg — grid search y evaluación
 
-- Mejor F1 (CV GroupKFold por `source`): **0.677**
-- Mejores hiperparámetros: `{'C': 1.0, 'class_weight': 'balanced', 'solver': 'lbfgs'}`
+- Mejor F1 (CV GroupKFold por `source`): **0.692**
+- Mejores hiperparámetros: `{'C': 10.0, 'class_weight': 'balanced', 'solver': 'liblinear'}`
 
 ## Rejilla de hiperparámetros (top-5 por F1)
 
 |   param_C | param_class_weight   | param_solver   |   mean_test_score |   std_test_score |
 |----------:|:---------------------|:---------------|------------------:|-----------------:|
-|       1   | balanced             | lbfgs          |            0.6773 |           0.0075 |
-|      10   | balanced             | lbfgs          |            0.6773 |           0.0075 |
-|      10   | balanced             | liblinear      |            0.6772 |           0.0076 |
-|       1   | balanced             | liblinear      |            0.6771 |           0.0073 |
-|       0.1 | balanced             | lbfgs          |            0.6736 |           0.0066 |
+|      10   | balanced             | liblinear      |            0.6915 |           0.0068 |
+|       1   | balanced             | liblinear      |            0.6912 |           0.0075 |
+|      10   | balanced             | lbfgs          |            0.691  |           0.0072 |
+|       1   | balanced             | lbfgs          |            0.6909 |           0.007  |
+|       0.1 | balanced             | lbfgs          |            0.6806 |           0.0069 |
 
 
 ## Métricas del modelo ajustado (secciones A–F)
 
-- **A** AUC-ROC 0.769 (IC95% [0.762, 0.776]) · AUC-PR 0.713
-- **B** F1 0.677 · precision 0.645 · recall 0.713 · accuracy 0.697 · specificity 0.685
-- **C** balanced accuracy 0.699
-- **D** Brier 0.196 · ECE 0.043
-- Umbral (Youden) 0.505
+- **A** AUC-ROC 0.790 (IC95% [0.783, 0.797]) · AUC-PR 0.747
+- **B** F1 0.695 · precision 0.650 · recall 0.746 · accuracy 0.708 · specificity 0.678
+- **C** balanced accuracy 0.712
+- **D** Brier 0.188 · ECE 0.044
+- Umbral (Youden) 0.485
