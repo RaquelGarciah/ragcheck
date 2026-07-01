@@ -44,3 +44,6 @@ KNN_PARAMS = {"n_neighbors": 15}
 # Evaluación.
 N_SPLITS = 5  # folds de GroupKFold por `source`
 N_BOOTSTRAP = 1000  # remuestreos para intervalos de confianza
+
+# Modelo que sirve la inferencia por defecto (el mejor de la comparativa).
+DEFAULT_MODEL = "xgboost"

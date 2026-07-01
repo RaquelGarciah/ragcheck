@@ -31,3 +31,6 @@ logs/
 .env
 .env.*
 !.env.example
+
+# Figuras en PDF: artefactos para LaTeX (regenerables). Se versionan los PNG.
+outputs/figures/*.pdf
