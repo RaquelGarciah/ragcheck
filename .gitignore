@@ -1,0 +1,33 @@
+# Sistema
+.DS_Store
+Icon?
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Datos y artefactos pesados (se regeneran; no van al portfolio)
+data/*
+!data/.gitkeep
+outputs/models/*
+!outputs/models/.gitkeep
+
+# Logs
+logs/
+
+# Memoria compartida local (hooks) — no va al portfolio
+.claude/shared_memory/
+
+# Secretos: NUNCA al repo (contiene API keys)
+.env
+.env.*
+!.env.example
