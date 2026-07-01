@@ -5,6 +5,43 @@ metodológicas, no el progreso trivial. Formato de cada entrada en `CLAUDE.md` �
 
 ---
 
+## [2026-07-01] Hallazgo — El cuello de botella de Summary es camuflaje léxico, no tipo sutil
+
+**Contexto.** Tras las features de nivel frase, Summary seguía siendo la tarea
+débil (AUC 0,702 vs QA 0,809, Data2txt 0,793). Análisis de error para saber por
+qué, antes de invertir en más features (`exploration/error_analysis.py`).
+
+**Detalle.** La hipótesis intuitiva —"Summary es difícil porque tiene más
+alucinación *sutil*"— es **falsa** y los datos la refutan: Summary es ~86%
+*evidente* (Evident Baseless 0,51 + Evident Conflict 0,34) y **QA tiene más tipo
+sutil (0,33) que Summary (0,14) pero puntúa mejor**. El tipo anotado no explica
+la dificultad.
+
+Lo que sí la explica es el **camuflaje léxico**, medido con el containment del
+*texto alucinado* contra la fuente: Data2txt 0,43 · QA 0,48 · **Summary 0,62**
+(mediana 0,67). Un resumen reutiliza el vocabulario del documento, así que el
+span alucinado comparte palabras con la fuente incluso cuando el error es
+evidente, y el solape léxico no lo separa del texto fiel. Confirmación directa:
+dentro de Summary, los **falsos negativos tienen mayor containment (0,641) que
+los aciertos (0,555)** — el modelo falla justo en los spans camuflados. Ejemplo
+canónico: *"completed the Boston Marathon in 26.2 hours"* (son 26,2 *millas*),
+containment de span = 1,00: error evidente, léxicamente invisible.
+
+**Implicaciones para la memoria.** (1) El capítulo de resultados puede afirmar,
+con figura, que el techo del clásico en Summary es *estructural* (camuflaje
+léxico), no un artefacto del tipo de alucinación —refuta una explicación fácil y
+la sustituye por una medida. (2) Marca la dirección de features futuras: para
+Summary hace falta señal **relacional** (consistencia número-unidad,
+entidad-relación, polaridad/negación), no más solape de vocabulario; añadir
+features de overlap ahí tiene techo. (3) Refuerza el marco: es la frontera entre
+minería léxica y representación semántica.
+
+**Referencias.** `exploration/error_analysis.py`;
+`outputs/reports/error_analysis_summary.md`; figuras `err_prob_por_tarea`,
+`err_span_containment`, `err_tipo_por_tarea`.
+
+---
+
 ## [2026-07-01] Decisión — Features de nivel frase; LSA descartada por redundante
 
 **Contexto.** El diagnóstico por tarea mostró que el gap con el estado del arte
