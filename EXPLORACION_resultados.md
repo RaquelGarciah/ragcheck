@@ -321,10 +321,13 @@ Todas medidas con el mismo protocolo honesto y **descartadas con datos** (criter
 
 | Vía | Qué es | Resultado | Por qué falla |
 |---|---|---|---|
-| **LSA** | TF-IDF + TruncatedSVD por fold | AUC +0,001, Summary plana | redundante con similitud por frase |
+| **LSA** | TF-IDF + TruncatedSVD por fold | AUC +0,001 como añadido *y* como reemplazo de `tfidf_cos` | redundante con `containment`; misma señal, peor |
 | **`sent_novel`** | novedad de n-gramas por frase | +0,001 global | el resumen fiel recombina igual |
 | **Umbral max-F1** | umbral por F1 en vez de Youden | test 0,681→0,674 ⬇ | no generaliza (prevalencia train≠test) |
 | **spaCy estructural** | dep. arcs / SVO / entidad-número | Summary 0,701→0,700 | resumen fiel recombina las dependencias |
+
+Nota: quitar `tfidf_cos` del todo tampoco cambia el AUC (0,824 idéntico) — es
+peso muerto redundante con `containment`, por eso no está en las 7 recomendadas.
 
 **El hilo común de Summary:** se probaron cuatro familias — solape léxico,
 similitud por frase, recombinación de n-gramas y **estructura sintáctica** — y
