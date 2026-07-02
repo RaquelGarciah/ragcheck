@@ -278,15 +278,84 @@ CPU, interpretable y determinista.
 
 ---
 
-## 9. Estado del código
+## 9. Selección de variables: ¿sobran features?
 
-- **Features**: `src/ragcheck/features.py` (18 features; LSA y `sent_novel`
-  descartadas y documentadas).
-- **Análisis de error**: `exploration/error_analysis.py` →
-  `outputs/reports/error_analysis_summary.md` + 3 figuras.
-- **Informes citables regenerados**: `outputs/reports/{e0_baseline,test_oficial,
-  <modelo>}.md`.
+Duda razonable (18 features): ¿overfitting o redundancia? Tres análisis
+(`exploration/feature_{selection,redundancy,pruning}.py`).
+
+**Forward stepwise por modelo** (greedy F1, GroupKFold): la curva OOF se aplana
+pronto. Rodilla (99% del mejor F1): logreg 10 · xgboost 8 · random_forest 12 ·
+svm 6 · knn 7 → mediana ≈ 8.
+
+**Redundancia (Spearman):** `novel_bigram`~`novel_trigram` 0,98;
+`containment`~`sent_cont_mean` 0,92; todo el bloque de solape 0,8–0,98. ~2–3
+señales independientes en 13 features.
+
+**Podado-vs-completo en test oficial** (top-k por importancia, xgboost):
+
+| k features | AUC | F1 | acc |
+|---|---|---|---|
+| 1 (`containment`) | 0,790 | 0,642 | 0,740 |
+| 5 | 0,820 | 0,662 | 0,750 |
+| **7** | **0,829** | **0,669** | **0,765** |
+| 10 | 0,832 | 0,671 | 0,768 |
+| 18 (todas) | 0,835 | 0,673 | 0,770 |
+
+De 7 a 18 features: +0,006 AUC, +0,004 F1, +0,005 acc (ruido).
+
+**Veredicto:** no hay overfitting peligroso (en test el rendimiento no cae al
+añadir features), pero **11 de 18 son redundantes**. **Subconjunto recomendado
+(7):** `containment`, `answer_len`, `num_overlap`, `jaccard`, `neg_diff`,
+`num_context`, `sent_sim_min`.
+
+Figuras: `fsel_{logreg,knn,svm,random_forest,xgboost}`, `feat_correlacion`,
+`feat_importancia_perm`, `feat_podado_test`.
+Informe: `outputs/reports/feature_selection.md`.
+
+---
+
+## 10. Vías exploradas y descartadas (resultados negativos)
+
+Todas medidas con el mismo protocolo honesto y **descartadas con datos** (criterio
+"sin código muerto"). Son material defendible: no es que no se intentara.
+
+| Vía | Qué es | Resultado | Por qué falla |
+|---|---|---|---|
+| **LSA** | TF-IDF + TruncatedSVD por fold | AUC +0,001, Summary plana | redundante con similitud por frase |
+| **`sent_novel`** | novedad de n-gramas por frase | +0,001 global | el resumen fiel recombina igual |
+| **Umbral max-F1** | umbral por F1 en vez de Youden | test 0,681→0,674 ⬇ | no generaliza (prevalencia train≠test) |
+| **spaCy estructural** | dep. arcs / SVO / entidad-número | Summary 0,701→0,700 | resumen fiel recombina las dependencias |
+
+**El hilo común de Summary:** se probaron cuatro familias — solape léxico,
+similitud por frase, recombinación de n-gramas y **estructura sintáctica** — y
+todas fallan por el mismo motivo: **resumir es recombinar**, así que el texto fiel
+y el alucinado de un resumen tienen la misma firma de superficie *y* de estructura.
+El camuflaje de los resúmenes está fuera del alcance de cualquier estadística
+respuesta-vs-fuente. Es la frontera entre minería clásica y semántica (cf.
+PARALLAX, `literatura_RAGTRUTH.md` §11.9), demostrada, no asumida.
+
+---
+
+## 11. Cierre
+
+- **Detector final honesto:** AUC 0,836 / F1 0,69 en test oficial, con **~7
+  features** que igualan a las 18 (parco, interpretable, determinista, CPU).
+- **Techo de Summary caracterizado** con cuatro familias de features → aportación.
+- **Camino recomendado (A):** podar a 7 features → re-grid-search → calibración
+  (Platt/isotónica, baja ECE 0,06–0,11) → PR a `main`.
+
+---
+
+## 12. Estado del código
+
+- **Features**: `src/ragcheck/features.py` (18 features; LSA, `sent_novel` y
+  spaCy estructural probadas y descartadas; podado a 7 pendiente en Camino A).
+- **Análisis**: `exploration/{error_analysis,feature_selection,feature_redundancy,
+  feature_pruning,spacy_features_probe}.py`.
+- **Informes citables**: `outputs/reports/{e0_baseline,test_oficial,<modelo>,
+  error_analysis_summary,feature_selection}.md`.
+- **Figuras**: `err_*`, `fsel_*`, `feat_*` (9 nuevas esta sesión).
 - **Tests**: 35/35 verdes (incluidos `test_no_leakage` y `test_determinism`).
-- **BITACORA**: hallazgo del camuflaje léxico, decisión de features relacionales,
-  corrección del umbral y del AUC en la documentación.
+- **BITACORA**: 5 entradas nuevas (camuflaje léxico, features relacionales,
+  corrección umbral+AUC, selección de variables, negativo de spaCy).
 - Rama `exp/error-analysis-summary` (PR a `main` pendiente).
