@@ -32,12 +32,15 @@ global 0,674 > max-F1 por tarea 0,660). Causa: la prevalencia de train (0,445) �
 test (0,349); el umbral bajo que maximiza F1 en train es demasiado agresivo para
 el test. Decisión: **mantener Youden** y no vender el umbral como palanca de F1.
 
-**Implicaciones para la memoria.** (1) La métrica principal a reportar es el
-**AUC-ROC** (0,836, nivel de Vectara HHEM y rozando Lynx-8B), no el F1, que la
-prevalencia del test tiene medio capado. (2) Reportar F1 **por tarea** con la
-explicación del techo de Summary. (3) El episodio del umbral es material
-defendible: ilustra la diferencia entre métrica en muestra y fuera de muestra
-bajo cambio de prevalencia.
+**Implicaciones para la memoria.** (1) Reportar **AUC-ROC** (0,836) como métrica
+**interna** (independiente del umbral, cumple la hipótesis ≥0,80), pero la
+**comparación externa con el SOTA se hace en F1 y accuracy**, no en AUC: la
+literatura de RAGTruth no publica AUC-ROC (ver `literatura_RAGTRUTH.md` §11.9), así
+que "nuestro AUC iguala a Lynx/HHEM" **no se sostiene** (Lynx reporta 80% accuracy,
+no AUC). En F1/accuracy estamos ~10 pts bajo los fine-tuned y por encima del
+GPT-4-turbo-juez. (2) Reportar F1 **por tarea** con la explicación del techo de
+Summary. (3) El episodio del umbral es material defendible: ilustra la diferencia
+entre métrica en muestra y fuera de muestra bajo cambio de prevalencia.
 
 **Referencias.** `src/ragcheck/features.py` (novel_bigram, novel_trigram,
 num_context, neg_diff); `outputs/reports/test_oficial.md`, `e0_baseline.md`.
