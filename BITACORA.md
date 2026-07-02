@@ -5,6 +5,39 @@ metodológicas, no el progreso trivial. Formato de cada entrada en `CLAUDE.md` �
 
 ---
 
+## [2026-07-02] Hallazgo — Features estructurales (spaCy) tampoco mueven Summary
+
+**Contexto.** Último intento de romper el techo de Summary: features relacionales
+con el parser de dependencias y NER de spaCy (dependencias/SVO/binding), que
+atacan el *binding* que la recombinación rompe. Se prototipó **sin integrar** para
+medir antes de tocar el contrato (`CLAUDE.md §2.3` prohíbe spaCy como feature).
+
+**Detalle.** Tres features (`exploration/spacy_features_probe.py`): `dep_novelty`
+(arcos de dependencia de la respuesta ausentes en la fuente), `svo_novelty`
+(tripletas sujeto-verbo-objeto novedosas), `ent_num_binding` (par entidad-número
+presente en la fuente). Aporte marginal (OOF, xgboost): global 0,824 → 0,825;
+**Summary 0,701 → 0,700 (plano)**; Data2txt +0,003, QA +0,002. `svo_novelty` sale
+la última (21/21) en importancia. Coste: 604 s de parseo.
+
+**Conclusión.** Se **descarta spaCy** (no se integra, no se cambia el contrato):
++0,001 global y cero en el objetivo no justifican la dependencia neuronal ni el
+coste. Motivo de fondo, ahora confirmado a nivel sintáctico: **un resumen fiel
+recombina las relaciones de dependencia igual que uno alucinado** (resumir es
+reestructurar), así que la estructura no separa, como no separaban los n-gramas.
+
+**Implicaciones para la memoria.** Cierre riguroso del techo de Summary: se
+probaron cuatro familias — solape léxico, similitud por frase, recombinación de
+n-gramas y **estructura sintáctica** — y **todas fallan por el mismo motivo**. No
+es falta de intento: es demostración de que el camuflaje de los resúmenes está
+fuera del alcance de cualquier estadística de superficie respuesta-vs-fuente. Es
+la frontera exacta entre minería clásica y representación semántica (cf. PARALLAX,
+`literatura_RAGTRUTH.md` §11.9). Se mantiene la restricción `CLAUDE.md §2.3`.
+
+**Referencias.** `exploration/spacy_features_probe.py`; entrada previa del
+camuflaje léxico; `literatura_RAGTRUTH.md` §11.9.
+
+---
+
 ## [2026-07-02] Decisión — Selección de variables: 18 features sobran, ~7 bastan
 
 **Contexto.** Duda razonable de si tantas features (18) causaban sobreajuste.
