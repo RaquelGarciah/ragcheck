@@ -5,6 +5,39 @@ metodológicas, no el progreso trivial. Formato de cada entrada en `CLAUDE.md` �
 
 ---
 
+## [2026-07-02] Decisión — Selección de variables: 18 features sobran, ~7 bastan
+
+**Contexto.** Duda razonable de si tantas features (18) causaban sobreajuste.
+Se hizo selección de variables antes de añadir nada nuevo (spaCy).
+
+**Detalle.** Tres análisis (`exploration/feature_{selection,redundancy,pruning}.py`):
+1. **Forward stepwise por modelo** (greedy F1, GroupKFold): la curva OOF se aplana
+   pronto; rodilla (99% del mejor F1) en 6–12 features según modelo (mediana ≈8).
+2. **Correlación**: redundancia masiva — `novel_bigram`~`novel_trigram` 0,98,
+   `containment`~`sent_cont_mean` 0,92, todo el bloque de solape 0,8–0,98. ~2–3
+   señales independientes en 13 features.
+3. **Podado-vs-completo en test oficial** (top-k por importancia de permutación):
+   xgboost k=7 → AUC 0,829 / F1 0,669 / acc 0,765; k=18 → 0,835 / 0,673 / 0,770.
+   De 7 a 18 features: +0,006 AUC, +0,004 F1, +0,005 acc (ruido).
+
+**Conclusión.** No hay sobreajuste peligroso (en test el rendimiento no cae al
+añadir features), pero **11 de 18 son redundantes**. Subconjunto recomendado (7,
+uno por cluster): `containment`, `answer_len`, `num_overlap`, `jaccard`,
+`neg_diff`, `num_context`, `sent_sim_min`.
+
+**Implicaciones para la memoria.** (1) Capítulo de selección de variables con las
+curvas por modelo y el podado — demuestra parsimonia y método, no acumulación de
+features. (2) Reportar el modelo parco (7 features) como principal: iguala al de
+18 dentro del ruido, más interpretable y defendible. (3) `containment` explica el
+grueso; las features relacionales (`num_context`, `neg_diff`) y una de nivel frase
+(`sent_sim_min`) sobreviven al podado — el resto es redundancia.
+
+**Referencias.** `exploration/feature_{selection,redundancy,pruning}.py`;
+`outputs/reports/feature_selection.md`; figuras `fsel_*`, `feat_correlacion`,
+`feat_importancia_perm`, `feat_podado_test`.
+
+---
+
 ## [2026-07-01] Decisión/Error — Features relacionales; el umbral max-F1 no generaliza
 
 **Contexto.** Tras el análisis de error (camuflaje léxico en Summary), se añaden
