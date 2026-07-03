@@ -69,3 +69,24 @@ conscientemente el umbral global.
 
 Scripts: `exploration/{global_thresholds,threshold_calibration_per_task,
 resampling_vs_threshold}.py`. Figuras `pr_top7`, `pr_top10`.
+
+## 4. Balancear POR TAREA (a petición): tampoco levanta la curva
+
+El desbalance real es por tarea (QA/Summary 31%, Data2txt 69%). AUC-PR por tarea
+en test (la altura de la curva), base vs balanceo:
+
+| Tarea | prev | base | scale_pos_weight | undersample (5 semillas) |
+|---|---|---|---|---|
+| Data2txt | 0,69 | 0,854 | 0,854 | 0,852 ± 0,003 |
+| QA | 0,31 | 0,491 | 0,502 | 0,487 ± 0,008 |
+| Summary | 0,31 | 0,422 | 0,427 | 0,393 ± 0,008 |
+
+- `scale_pos_weight` (no descarta datos): AUC-PR **invariante** por tarea.
+- undersample: igual o **peor** (Summary 0,422→0,393, descarta datos útiles).
+- **Corrección de ruido:** un undersample de *una sola semilla* dio AUC-PR 0,520
+  en QA (parecía mejora); con **5 semillas** es 0,487 = base → era ruido de
+  muestreo. Por eso se promedia.
+
+**Balancear por tarea solo desliza recall↔precisión (operating point); no añade
+poder discriminativo.** El techo de cada tarea lo fijan features × prevalencia.
+Scripts: `exploration/resampling_per_task{,_aucpr}.py`.
