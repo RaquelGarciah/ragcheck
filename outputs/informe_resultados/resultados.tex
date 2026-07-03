@@ -5,699 +5,671 @@
 \usepackage[spanish,es-tabla]{babel}
 \usepackage{lmodern}
 \usepackage{graphicx}
+\usepackage[a4paper,margin=2.4cm]{geometry}
 \usepackage{amsmath,amssymb,amsthm}
 \usepackage{booktabs}
-\usepackage{longtable}
 \usepackage{array}
 \usepackage{subcaption}
 \usepackage{float}
-\usepackage{siunitx}
 \usepackage[hidelinks]{hyperref}
 
 \graphicspath{{../figures/}}
 
+% Empaquetado de floats: menos páginas semivacías.
+\renewcommand{\topfraction}{0.92}
+\renewcommand{\bottomfraction}{0.9}
+\renewcommand{\textfraction}{0.08}
+\renewcommand{\floatpagefraction}{0.82}
+\setcounter{topnumber}{3}
+\setcounter{totalnumber}{4}
+
 \theoremstyle{definition}
 \newtheorem{definicion}{Definición}
 
-% Ancho estándar para las figuras de una columna.
-\newcommand{\figw}{0.82\textwidth}
-
-\title{Detección de alucinaciones en sistemas RAG mediante \\ aprendizaje automático clásico \\[0.3cm]
-\large Capítulo de resultados (caso de estudio)}
-\author{Raquel García Hernández}
-\date{}
+\newcommand{\figw}{0.70\textwidth}
+\newcommand{\tc}[1]{\texttt{#1}}
 
 \begin{document}
-\maketitle
 
 \chapter{Resultados}
 
-El propósito de este capítulo es reconstruir, paso a paso, el camino que lleva desde
-la definición del problema hasta un detector de alucinaciones válido y honesto. No
-presentamos solo el modelo final: mostramos primero cada exploración con sus cifras,
-incluidas las que fracasaron, y para cada decisión justificamos la opción con la que
-nos quedamos. El orden reproduce la forma en que un problema de aprendizaje automático
-se ataca en la práctica. Empezamos por entender los datos y su desbalance, seguimos
-por la ingeniería y la selección de características, tratamos después el desbalance de
-clases como un problema de decisión, comparamos los cinco clasificadores clásicos bajo
-una evaluación sin fugas y cerramos situando el resultado frente al estado del arte.
-Todas las cifras salen de la librería del proyecto con semilla fija, y cada tabla
-tiene su fuente única en los informes de \texttt{outputs/reports/}.
+El propósito de este capítulo es reconstruir, paso a paso, cómo se construye un detector
+de alucinaciones para sistemas RAG con aprendizaje automático clásico, y presentar los
+resultados que alcanza. El recorrido sigue el orden natural de un problema de
+aprendizaje: primero se presenta la base de datos y se caracteriza el fenómeno; después
+se preparan los datos mediante ingeniería de características y se selecciona un
+subconjunto de variables; a continuación se exponen las métricas y la metodología de
+evaluación; luego se entrena y compara cada modelo; y por último se sitúa el resultado
+frente al estado del arte. Dos aspectos reciben atención especial por su peso en este
+problema: la \emph{ingeniería de características}, que es donde reside casi toda la señal,
+y el \emph{desbalance de clases}, que condiciona la decisión final. La exploración de
+las vías que no funcionaron se recoge, de forma condensada, al final del capítulo.
 
-\section{Definición del problema y protocolo}
+\section{Presentación de la base de datos}
 
-Un sistema de generación aumentada por recuperación (RAG) responde a una consulta
-apoyándose en un documento fuente recuperado \cite{lewis2020rag}. La respuesta alucina
-cuando afirma algo que la fuente no respalda \cite{ji2023survey}. Nuestro objetivo es
-construir un clasificador que, dado el par (respuesta, fuente), decida si la respuesta
-contiene alguna alucinación, usando exclusivamente aprendizaje automático clásico y
-características léxicas y estadísticas, sin redes neuronales ni llamadas a ningún modelo
-de lenguaje. La motivación es reproducir, a coste mil veces menor, lo que hoy hace un
-evaluador tipo \emph{LLM como juez}, con un modelo interpretable y determinista.
+\subsection{Introducción y problema}
 
-La hipótesis falsable que fijamos al inicio es que un clasificador clásico sobre estas
-características alcanza un AUC-ROC de al menos 0,80 sobre RAGTruth con evaluación
-honesta. El AUC-ROC \cite{fawcett2006roc} es nuestra métrica interna porque no depende
-del umbral de decisión y mide la separación pura entre clases. Ahora bien, el estado
-del arte sobre RAGTruth no publica AUC, sino F1 a nivel de respuesta y accuracy. La
-comparación externa, por tanto, se hace en F1 y accuracy, y siempre sobre el mismo
-conjunto de test oficial que usa la literatura.
+Un sistema de generación aumentada por recuperación (RAG) responde a una consulta en dos
+fases: recupera uno o varios documentos relevantes y, condicionado a ellos, genera una
+respuesta en lenguaje natural \cite{lewis2020rag}. El sistema alucina cuando la respuesta
+afirma algo que el documento recuperado no respalda \cite{ji2023survey}. Por ejemplo,
+ante una fuente que dice \emph{``completó el maratón de Boston, de 42 km''}, una respuesta
+que afirme \emph{``lo completó en 26,2 horas''} es una alucinación: el número existe en
+el dominio, pero la afirmación no está sostenida por la fuente.
 
-El protocolo de evaluación es la parte más delicada. Para seleccionar modelos, umbrales
-y características validamos con \texttt{GroupKFold} agrupando por documento fuente, de
-modo que ninguna fuente aparece a la vez en entrenamiento y validación; un
-\texttt{KFold} aleatorio filtraría información entre particiones e inflaría el resultado.
-Para reportar la cifra que compite con la literatura evaluamos sobre el split oficial de
-test de RAGTruth, que permanece intacto durante todo el desarrollo. Cualquier
-transformación con parámetros, como la vectorización TF-IDF, se ajusta solo con
-entrenamiento. La semilla es 42 en todo el flujo.
+Detectar estas alucinaciones importa porque un sistema RAG que inventa datos con tono
+seguro es peligroso en aplicaciones reales. Hoy se detectan sobre todo con un modelo de
+lenguaje grande actuando como juez, lo que es caro y opaco. El objetivo de este trabajo
+es construir un detector \emph{clásico}, barato e interpretable, que dado el par
+(respuesta, fuente) decida si la respuesta contiene alguna alucinación, usando solo
+características léxicas y estadísticas y un clasificador clásico. La hipótesis falsable que
+guía el trabajo es que tal detector alcanza un AUC-ROC de al menos 0,80 sobre RAGTruth
+con una evaluación honesta.
 
-\section{La base de datos: RAGTruth}
+\subsection{Composición y variables iniciales}
 
-RAGTruth \cite{niu2024ragtruth} es un corpus de salidas de modelos de lenguaje anotadas
-por humanos, tramo a tramo, según contengan o no alucinaciones. Reúne alrededor de
-17\,790 respuestas sobre 2\,965 prompts, generadas por varios modelos y repartidas en
-tres tareas: respuesta a preguntas (QA), generación a partir de datos estructurados
-(Data2txt) y resumen de documentos (Summary, con fuente en CNN/DailyMail). A partir de
-las anotaciones \texttt{hallucination\_labels} construimos una etiqueta binaria por
-respuesta: positiva si existe al menos un tramo alucinado. El corpus distingue además
-cuatro tipos de alucinación, cruzando dos ejes: evidente frente a sutil, e información
-inventada frente a conflicto directo con la fuente.
+Se emplea RAGTruth \cite{niu2024ragtruth}, un corpus de salidas de modelos de lenguaje
+anotadas por humanos según contengan o no alucinaciones. Cubre tres tareas: respuesta a
+preguntas (QA), generación de texto a partir de datos estructurados (Data2txt) y resumen
+de documentos (Summary). Se trabaja con la partición oficial: 15\,090 respuestas de
+entrenamiento y 2\,700 de test. Cada registro aporta las variables de origen del
+Cuadro~\ref{tab:vars}; nótese que la entrada del problema es \emph{texto}, no un vector
+numérico, lo que motiva la ingeniería de características de la sección siguiente.
 
-Trabajamos con la partición oficial: 15\,090 respuestas de entrenamiento y 2\,700 de
-test. La prevalencia global de alucinación es del 44,5\,\% en entrenamiento y del
-34,9\,\% en test. Esta diferencia no es un detalle: adelanta que la proporción de
-positivos se desplaza entre las dos particiones, un fenómeno que gobierna buena parte
-de los resultados posteriores.
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lp{9.3cm}}
+\toprule
+Variable & Descripción \\
+\midrule
+\tc{response} & Respuesta generada por el modelo de lenguaje (el texto a auditar). \\
+\tc{source} & Documento fuente recuperado (el contexto que debe respaldar la respuesta). \\
+\tc{task\_type} & Tarea: QA, Data2txt o Summary. \\
+\tc{model} & Modelo de lenguaje que generó la respuesta. \\
+\tc{hallucination\_labels} & Anotación humana: lista de tramos (\emph{spans}) alucinados,
+con su tipo. \\
+\bottomrule
+\end{tabular}
+\caption{Variables de origen de RAGTruth. La variable objetivo se deriva de
+\tc{hallucination\_labels} (sección~\ref{sec:target}).}
+\label{tab:vars}
+\end{table}
 
-\section{Descriptivo de los datos}
+\subsection{De las anotaciones a la variable objetivo binaria}
+\label{sec:target}
 
-\subsection{Desbalance de clases: global y por tarea}
+La anotación \tc{hallucination\_labels} marca, dentro de cada respuesta, los tramos
+concretos que alucinan. A partir de ella se define la variable objetivo binaria del
+problema: una respuesta se etiqueta \tc{label}${}=1$ (alucina) si contiene al menos un
+tramo anotado, y \tc{label}${}=0$ (limpia) en caso contrario. La anotación aparece en tres
+formatos en el corpus (lista vacía, lista con tramos, o cadena de texto que representa la
+lista), y los tres se normalizan al construir la etiqueta. La tarea es, por tanto, de
+clasificación binaria a nivel de respuesta.
 
-El desbalance global es moderado, pero engaña. Al abrir la prevalencia por tarea aparece
-la estructura real del problema, que resumimos en el Cuadro~\ref{tab:prev} y en la
-Figura~\ref{fig:prev}. Data2txt es mayoritariamente positiva, con casi dos de cada tres
-respuestas alucinadas; QA y Summary son minoritariamente positivas, y su prevalencia
-cae aún más en el test.
+\subsection{Los cuatro tipos de alucinación}
 
-\begin{table}[H]
+RAGTruth distingue cuatro tipos de alucinación, cruzando dos ejes: si el error es
+\emph{evidente} o \emph{sutil}, y si consiste en información \emph{sin base} (inventada) o
+en un \emph{conflicto} directo con la fuente. El Cuadro~\ref{tab:tipos} muestra su
+composición por tarea. El dato relevante para lo que sigue es que Summary es en su gran
+mayoría de tipo evidente (aproximadamente el 86\,\%), y aun así, como veremos, es la tarea
+más difícil de detectar; el tipo anotado no explica la dificultad. El descriptivo de los
+tramos (Figura~\ref{fig:spans}) completa el retrato: dominan los números, las fechas y los
+nombres propios, lo que justifica de forma natural las características de solape numérico y
+de entidades.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+Tarea & Evidente sin base & Evidente conflicto & Sutil sin base & Sutil conflicto \\
+\midrule
+Data2txt & 0,383 & 0,447 & 0,163 & 0,007 \\
+QA & 0,522 & 0,146 & 0,314 & 0,018 \\
+Summary & 0,514 & 0,343 & 0,100 & 0,043 \\
+\bottomrule
+\end{tabular}
+\caption{Composición de los tipos de alucinación por tarea (fracción de tramos). Summary
+es mayoritariamente evidente y aun así la tarea difícil.}
+\label{tab:tipos}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\begin{subfigure}{0.32\textwidth}\includegraphics[width=\textwidth]{spans_tipo}\caption{Tipo.}\end{subfigure}\hfill
+\begin{subfigure}{0.32\textwidth}\includegraphics[width=\textwidth]{spans_entidad}\caption{Entidad.}\end{subfigure}\hfill
+\begin{subfigure}{0.32\textwidth}\includegraphics[width=\textwidth]{spans_longitud}\caption{Longitud (tokens).}\end{subfigure}
+\caption{Descriptivo de los tramos alucinados. Predominan números y entidades nombradas.}
+\label{fig:spans}
+\end{figure}
+
+\subsection{El desbalance de clases}
+\label{sec:desb-intro}
+
+La prevalencia global de alucinación es del 44,5\,\% en entrenamiento y del 34,9\,\% en
+test. El desbalance global es moderado, pero engaña: al abrirlo por tarea
+(Cuadro~\ref{tab:prev} y Figura~\ref{fig:prev}) aparece la estructura real. Data2txt es
+mayoritariamente positiva; QA y Summary son minoritariamente positivas, y su prevalencia
+cae todavía más en el test. Estamos ante un desbalance \emph{heterogéneo por tarea} y con
+\emph{desplazamiento} entre entrenamiento y test. La consecuencia práctica, un único
+umbral de decisión no puede ser óptimo para prevalencias tan dispares, se aborda en la
+metodología (sección~\ref{sec:desb-trat}).
+
+\begin{table}[htbp]
 \centering
 \begin{tabular}{lcc}
 \toprule
 Tarea & prevalencia (train) & prevalencia (test) \\
 \midrule
 Data2txt & 0,694 & 0,643 \\
-QA       & 0,311 & 0,178 \\
-Summary  & 0,311 & 0,227 \\
+QA & 0,311 & 0,178 \\
+Summary & 0,311 & 0,227 \\
 \midrule
-Global   & 0,445 & 0,349 \\
+Global & 0,445 & 0,349 \\
 \bottomrule
 \end{tabular}
-\caption{Prevalencia de alucinación por tarea. La proporción de positivos difiere entre
-tareas y se desplaza entre entrenamiento y test, de forma desigual en cada una.}
+\caption{Prevalencia de alucinación por tarea. El desbalance difiere entre tareas y se
+desplaza train$\to$test de forma desigual.}
 \label{tab:prev}
 \end{table}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\includegraphics[width=\figw]{desb_prevalencia_tarea}
-\caption{Prevalencia por tarea en entrenamiento y test. El desplazamiento del prior es
-mayor en QA (0,311 a 0,178), lo que dejará un umbral global demasiado alto para esa tarea.}
+\includegraphics[width=0.72\textwidth]{desb_prevalencia_tarea}
+\caption{Prevalencia por tarea en entrenamiento y test. El desplazamiento es mayor en QA
+(0,311$\to$0,178).}
 \label{fig:prev}
 \end{figure}
 
-Estamos ante un desbalance heterogéneo por subgrupo y con desplazamiento de prior. La
-consecuencia práctica se anticipa aquí: un único umbral de decisión no puede ser óptimo
-para prevalencias tan dispares, y el tratamiento del desbalance no será un ajuste global
-sino una decisión por tarea. La distribución de longitudes por clase
-(Figura~\ref{fig:eda}) y el reúso de documentos, que motiva el \texttt{GroupKFold},
-completan el retrato del conjunto.
+\section{Preparación de los datos: ingeniería de características}
 
-\begin{figure}[H]
-\centering
-\begin{subfigure}{0.48\textwidth}
-\includegraphics[width=\textwidth]{eda_balance_clases}
-\caption{Balance global de clases (train).}
-\end{subfigure}\hfill
-\begin{subfigure}{0.48\textwidth}
-\includegraphics[width=\textwidth]{eda_longitud_por_clase}
-\caption{Longitud de la respuesta por clase.}
-\end{subfigure}
-\caption{Descriptivo global del conjunto de entrenamiento.}
-\label{fig:eda}
-\end{figure}
+Como la entrada es texto, el primer paso es transformar cada par (respuesta, fuente) en un
+vector numérico de características que capturen indicios de alucinación. Esta sección es el
+núcleo del trabajo: define las características candidatas, comprueba si separan las clases,
+y selecciona un subconjunto mediante un método formal.
 
-\subsection{Caracterización del fenómeno: los tramos alucinados}
+\subsection{Tokenización y notación}
 
-Antes de modelar conviene entender qué aspecto tiene una alucinación. Analizamos los
-tramos anotados en su posición dentro de la respuesta, su longitud, su categoría
-gramatical, el tipo de entidad que contienen y el tipo de alucinación
-(Figura~\ref{fig:spans}). Dominan las alucinaciones de números, fechas y nombres
-propios, lo que justifica de forma natural las características de solape numérico y de
-entidades. La composición por tipo revela un dato que gobierna el capítulo de error:
-Summary es en un 86\,\% de tipo evidente, y sin embargo, como veremos, es la tarea más
-difícil. El tipo anotado no explica la dificultad.
+Toda característica se construye sobre una tokenización simple: el texto se pasa a
+minúsculas y se extraen las secuencias alfanuméricas como tokens; para las características
+numéricas se usa una variante que conserva los decimales como una sola pieza
+(``26,2'' es un token), necesaria para los $n$-gramas y la consistencia numérica. Sobre
+esta tokenización se definen los dos conjuntos básicos.
 
-\begin{figure}[H]
-\centering
-\begin{subfigure}{0.32\textwidth}
-\includegraphics[width=\textwidth]{spans_posicion}
-\caption{Posición relativa.}
-\end{subfigure}\hfill
-\begin{subfigure}{0.32\textwidth}
-\includegraphics[width=\textwidth]{spans_longitud}
-\caption{Longitud (tokens).}
-\end{subfigure}\hfill
-\begin{subfigure}{0.32\textwidth}
-\includegraphics[width=\textwidth]{spans_entidad}
-\caption{Tipo de entidad.}
-\end{subfigure}
+\begin{definicion}
+Dada una respuesta y su fuente, sea $R$ el conjunto de palabras únicas de la respuesta y
+$F$ el conjunto de palabras únicas de la fuente.
+\end{definicion}
 
-\vspace{0.3cm}
-\begin{subfigure}{0.32\textwidth}
-\includegraphics[width=\textwidth]{spans_pos}
-\caption{Categoría gramatical.}
-\end{subfigure}\hfill
-\begin{subfigure}{0.32\textwidth}
-\includegraphics[width=\textwidth]{spans_tipo}
-\caption{Tipo de alucinación.}
-\end{subfigure}\hfill
-\begin{subfigure}{0.32\textwidth}
-\includegraphics[width=\textwidth]{spans_longitud_por_tarea}
-\caption{Longitud por tarea.}
-\end{subfigure}
-\caption{Descriptivo de los tramos alucinados. Predominan números y entidades; Summary
-es mayoritariamente de tipo evidente pese a ser la tarea difícil.}
-\label{fig:spans}
-\end{figure}
+$R$ y $F$ son la base de casi todas las características: la idea recurrente es que una
+respuesta fiel reutiliza el vocabulario de la fuente, mientras que una alucinación
+introduce o recombina términos.
 
-\section{Exploración de características}
+\subsection{Catálogo de características candidatas}
 
-\subsection{Catálogo de características}
+Se construyen dieciocho características candidatas, agrupadas en cuatro familias. El
+Cuadro~\ref{tab:feats} las recoge con su fórmula y la señal que persiguen. La familia de
+solape léxico mide cuánto vocabulario comparte la respuesta con la fuente; la numérica y
+relacional busca cifras y unidades fabricadas; la de nivel frase agrega el soporte frase a
+frase, con la intuición de que una alucinación suele ser \emph{una} frase sin respaldo que
+el promedio global diluye, por lo que se agrega con el mínimo; y la codificación
+\emph{one-hot} de la tarea permite al modelo especializar su decisión por tipo de tarea.
+El coseno TF-IDF \cite{salton1988tfidf} aporta una medida de similitud clásica.
 
-Construimos la matriz de diseño con tres bloques. El primero son nueve características
-escalares sobre el par (respuesta, fuente), que capturan solape léxico, consistencia
-numérica y recombinación. El segundo agrega el soporte por frase, con la intuición de
-que una alucinación suele ser una frase sin respaldo dentro de una respuesta por lo
-demás correcta, y que un promedio sobre toda la respuesta la diluye; por eso agregamos
-con el mínimo, que delata la frase peor sostenida. El tercero es la codificación
-\emph{one-hot} de la tarea, que permite al modelo especializar su respuesta por tipo de
-tarea. El Cuadro~\ref{tab:feats} recoge las dieciocho características.
-
-\begin{table}[H]
+\begin{table}[htbp]
 \centering
 \small
-\begin{tabular}{p{3cm}p{10.5cm}}
+\begin{tabular}{lp{5.1cm}p{5.0cm}}
 \toprule
-Bloque & Características \\
+Característica & Definición & Señal que captura \\
 \midrule
-Escalares (9) & \texttt{containment} (precisión léxica $|R\cap F|/|R|$), \texttt{jaccard},
-\texttt{tfidf\_cos} (coseno TF-IDF ajustado por par), \texttt{num\_overlap} (números de la
-respuesta presentes en la fuente), \texttt{novel\_bigram}, \texttt{novel\_trigram}
-(recombinación de $n$-gramas), \texttt{num\_context} (consistencia número-unidad),
-\texttt{neg\_diff} (diferencia de negación), \texttt{answer\_len} \\
-\midrule
-Nivel frase (6) & \texttt{sent\_cont\_min}, \texttt{sent\_cont\_mean}, \texttt{sent\_cont\_std},
-\texttt{sent\_frac\_low}, \texttt{sent\_sim\_min}, \texttt{sent\_sim\_mean} \\
-\midrule
-One-hot tarea (3) & \texttt{task\_QA}, \texttt{task\_Summary}, \texttt{task\_Data2txt} \\
+\tc{containment} & $|R\cap F|/|R|$ & precisión léxica (señal dominante) \\
+\tc{jaccard} & $|R\cap F|/|R\cup F|$ & solape simétrico \\
+\tc{tfidf\_cos} & coseno TF-IDF respuesta--fuente & similitud distribucional \\
+\tc{num\_overlap} & fracción de números de $R$ en $F$ & cifras/fechas inventadas \\
+\tc{novel\_bigram} & fracción de bigramas de $R$ no en $F$ & recombinación de pares \\
+\tc{novel\_trigram} & ídem con trigramas & recombinación estricta \\
+\tc{num\_context} & fracción de números con su unidad en $F$ & cambio de unidad/atributo \\
+\tc{neg\_diff} & diferencia de densidad de negación & conflicto de polaridad \\
+\tc{answer\_len} & longitud de la respuesta (tokens) & longitud \\
+\tc{sent\_cont\_*} & containment por frase (mín/media/desv/\% bajo) & frase peor sostenida \\
+\tc{sent\_sim\_*} & similitud por frase (mín/media) & frase menos parecida \\
+\tc{task\_*} & one-hot de la tarea (QA/Summary/Data2txt) & especialización por tarea \\
 \bottomrule
 \end{tabular}
-\caption{Las dieciocho características. $R$ y $F$ son los conjuntos de palabras únicas de
-respuesta y fuente. El coseno TF-IDF sigue el modelo de espacio vectorial
-\cite{salton1988tfidf}.}
+\caption{Las dieciocho características candidatas. $R$ y $F$ son los conjuntos de palabras
+únicas de respuesta y fuente.}
 \label{tab:feats}
 \end{table}
 
-La característica \texttt{containment}, la fracción de palabras de la respuesta que
-aparecen en la fuente, es la señal dominante, y su signo es el esperado: más solape
-léxico implica menos probabilidad de alucinación. La codificación de tarea y el coseno
-TF-IDF se mantienen en el modelo por su papel funcional, la primera para especializar
-por tarea y la segunda como medida semántica clásica, aunque su aporte marginal sea
-pequeño una vez presente \texttt{containment}, como cuantificamos más abajo. La
-separabilidad univariada de cada característica por clase aparece en la
-Figura~\ref{fig:sep}.
+\subsection{¿Separan las características las clases?}
 
-\begin{figure}[H]
+Antes de seleccionar, conviene ver si estas características discriminan. La
+Figura~\ref{fig:sep} muestra la distribución de cada característica continua separada por
+la variable objetivo. La señal es visible: en \tc{containment}, \tc{jaccard} o
+\tc{num\_context}, la clase alucinada se desplaza hacia menos solape. La
+Figura~\ref{fig:corr} muestra que muchas características están fuertemente correlacionadas
+entre sí (el bloque de solape léxico ronda correlaciones de 0,8 a 0,98), lo que anticipa
+que sobran variables.
+
+\begin{figure}[htbp]
 \centering
 \includegraphics[width=\figw]{eda_separabilidad_features}
-\caption{Distribución de cada característica separada por clase. \texttt{containment} y
-las medidas de solape muestran el mayor desplazamiento entre limpio y alucinado.}
+\caption{Distribución de cada característica continua separada por clase. \tc{containment}
+y las medidas de solape muestran el mayor desplazamiento.}
 \label{fig:sep}
 \end{figure}
 
-\subsection{Características probadas y descartadas}
-
-La exploración de características incluye varias vías que no funcionaron. Las
-documentamos porque forman parte de la caracterización del techo del problema: no es que
-no se intentara. El Cuadro~\ref{tab:descartadas} recoge cada vía y la cifra que la
-descartó, siempre medida con el protocolo honesto.
-
-\begin{table}[H]
+\begin{figure}[htbp]
 \centering
+\includegraphics[width=0.62\textwidth]{feat_correlacion}
+\caption{Correlación de Spearman entre las características candidatas. El bloque de solape
+léxico está muy correlacionado: hay pocas señales independientes.}
+\label{fig:corr}
+\end{figure}
+
+\subsection{Selección de variables con RFE y el método del codo}
+
+Para elegir un subconjunto se usa \emph{Recursive Feature Elimination} (RFE)
+\cite{guyon2002rfe}, un método envolvente: se entrena el modelo con todas las
+características, se elimina la menos importante según su importancia interna, se reentrena
+y se repite. El orden inverso de eliminación da un ranking de más a menos importante. A
+continuación se traza el rendimiento en validación cruzada (GroupKFold por \tc{source})
+frente al número de variables añadidas en ese orden, y se fija el número por el
+\emph{método del codo} sobre la curva de F1: el punto a partir del cual añadir variables
+deja de aportar.
+
+La Figura~\ref{fig:codo} muestra la curva. El AUC sube de golpe hasta unas seis variables
+y luego se aplana; el F1 alcanza su mejor valor en $k=11$ y a partir de ahí no mejora. Se
+fija el conjunto en \textbf{once variables}. La característica \tc{tfidf\_cos} no entra en
+la selección (su aporte es de cola, por debajo de 0,004 de importancia), y se acepta el
+veredicto del método sin forzarla. Las tres variables \emph{one-hot} de tarea sí entran.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\figw]{fsel_rfe_codo}
+\caption{Selección RFE: las seis métricas (OOF, GroupKFold) frente al número de variables,
+en orden RFE. El codo sobre F1 fija $k=11$; el rango 6--18 está prácticamente empatado en
+AUC.}
+\label{fig:codo}
+\end{figure}
+
+\subsection{El conjunto elegido}
+
+Las once variables definitivas, en orden de importancia, son:
+
+\begin{center}
 \small
-\begin{tabular}{p{3.2cm}p{6.3cm}p{3.8cm}}
-\toprule
-Vía & Qué es & Resultado \\
-\midrule
-LSA & TF-IDF con descomposición en valores singulares truncada
-\cite{deerwester1990lsa,halko2011svd}, ajustada por partición & $+0,001$ de AUC global;
-redundante con \texttt{containment} \\
-\texttt{sent\_novel} & Novedad de $n$-gramas agregada por frase & $+0,001$ global; el
-resumen fiel recombina igual que el alucinado \\
-Estructura sintáctica & Arcos de dependencia, sujeto-verbo-objeto y enlace
-entidad-número con spaCy & Summary $0{,}701 \to 0{,}700$ \\
-\bottomrule
-\end{tabular}
-\caption{Vías de características exploradas y descartadas. Cuatro familias distintas,
-solape léxico, similitud por frase, recombinación de $n$-gramas y estructura sintáctica,
-fracasan por el mismo motivo en Summary: resumir es recombinar, y el texto fiel comparte
-la firma de superficie con el alucinado.}
-\label{tab:descartadas}
-\end{table}
+\tc{containment}, \tc{task\_QA}, \tc{task\_Summary}, \tc{task\_Data2txt},
+\tc{num\_context}, \tc{answer\_len}, \tc{jaccard}, \tc{sent\_cont\_min},
+\tc{novel\_bigram}, \tc{num\_overlap}, \tc{sent\_sim\_min}.
+\end{center}
 
-\subsection{Redundancia y selección de variables}
+El conjunto es interpretable: \tc{containment} domina, acompañada de la consistencia
+numérica (\tc{num\_context}, \tc{num\_overlap}), la recombinación (\tc{novel\_bigram}), el
+soporte por frase (\tc{sent\_cont\_min}, \tc{sent\_sim\_min}) y la longitud, más la
+codificación de tarea. Sobre este conjunto se hace todo el estudio posterior. Su
+separabilidad por clase y su correlación aparecen en la Figura~\ref{fig:selstudy}.
 
-Con dieciocho características cabe preguntarse si sobran. Tres análisis convergen en que
-sí hay redundancia, pero no sobreajuste peligroso. La correlación de Spearman
-(Figura~\ref{fig:featcorr}) muestra que el bloque de solape está muy correlacionado,
-con pares como \texttt{novel\_bigram} y \texttt{novel\_trigram} en 0,98; hay del orden de
-dos o tres señales independientes en trece características. Una selección hacia delante
-por modelo aplana la curva de F1 pronto, con una rodilla alrededor de ocho
-características (Figura~\ref{fig:fsel}). Y al comparar el modelo podado con el completo
-en el test oficial, pasar de siete a dieciocho características aporta 0,006 de AUC y
-0,004 de F1, dentro del ruido.
-
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\begin{subfigure}{0.48\textwidth}
-\includegraphics[width=\textwidth]{feat_correlacion}
-\caption{Correlación de Spearman entre características.}
-\label{fig:featcorr}
-\end{subfigure}\hfill
-\begin{subfigure}{0.48\textwidth}
-\includegraphics[width=\textwidth]{feat_podado_test}
-\caption{Rendimiento frente a número de características (test).}
-\end{subfigure}
-\caption{Redundancia y parsimonia. Siete características igualan a las dieciocho.}
+\begin{subfigure}{0.62\textwidth}\includegraphics[width=\textwidth]{feat_sel_separabilidad}\caption{Separabilidad por clase.}\end{subfigure}\hfill
+\begin{subfigure}{0.36\textwidth}\includegraphics[width=\textwidth]{feat_sel_correlacion}\caption{Correlación de Spearman.}\end{subfigure}
+\caption{Descriptivo del conjunto de once variables elegido.}
+\label{fig:selstudy}
 \end{figure}
 
-\begin{figure}[H]
+\section{Métricas}
+
+El propósito de esta sección es presentar las métricas con las que se evalúan los modelos.
+Todas se construyen sobre cuatro conteos básicos de la matriz de confusión
+(Figura~\ref{fig:confmat}), tomando como clase positiva la alucinación: verdaderos
+positivos (VP), verdaderos negativos (VN), falsos positivos (FP, error de tipo I) y falsos
+negativos (FN, error de tipo II). En detección de alucinaciones el FN es el error caro:
+una alucinación que se cuela sin detectar.
+
+\begin{figure}[htbp]
 \centering
-\includegraphics[width=\figw]{fsel_xgboost}
-\caption{Selección hacia delante (XGBoost). Cada métrica frente a la incorporación
-ordenada de características. La curva se satura pronto: \texttt{containment} carga con
-casi toda la señal.}
-\label{fig:fsel}
+\includegraphics[width=0.62\textwidth]{concept_matriz_confusion}
+\caption{Matriz de confusión. La clase positiva es la alucinación; el falso negativo
+(tipo II) es una alucinación no detectada.}
+\label{fig:confmat}
 \end{figure}
 
-\subsection{Qué características explican el rendimiento}
+A partir de estos conteos se definen la precisión y la exhaustividad (recall):
+\begin{equation}
+\text{precisión} = \frac{VP}{VP+FP}, \qquad
+\text{recall} = \frac{VP}{VP+FN}.
+\end{equation}
+La precisión mide cómo de acertado es el modelo cuando predice alucinación; el recall,
+cuántas de las alucinaciones reales caza. Ambas se mueven en sentidos opuestos según el
+umbral de decisión: exigir más para predecir positivo sube la precisión y baja el recall,
+y viceversa. La curva precisión-recall resume ese equilibrio.
 
-La importancia por permutación mide cuánto cae el AUC real al romper cada característica.
-El resultado es contundente: \texttt{containment} explica unas ocho veces más que la
-siguiente (Figura~\ref{fig:imp}). Rompiéndola, el AUC cae dieciséis puntos; rompiendo
-cualquier otra, menos de dos. La importancia acumulada cruza el 80\,\% con muy pocas
-características. Al desglosar por tarea aparece un matiz valioso: en Data2txt la
-característica relacional \texttt{num\_context} es la primera, por encima de
-\texttt{containment}, porque la consistencia número-unidad es lo que caza las cifras
-fabricadas; en QA y Summary casi todo depende del solape léxico.
+La curva ROC contrapone la tasa de verdaderos positivos (el recall) frente a la tasa de
+falsos positivos al variar el umbral, y su área, el AUC-ROC \cite{fawcett2006roc}, resume
+el rendimiento en todos los umbrales. El AUC tiene dos propiedades que lo hacen la métrica
+interna del trabajo: es invariante a la escala y \emph{invariante al umbral}, es decir,
+mide la separación pura entre clases. El valor F1 combina precisión y recall en su media
+armónica, y su generalización $F_\beta$ pondera el recall $\beta^2$ veces más que la
+precisión:
+\begin{equation}
+F_1 = 2\,\frac{\text{precisión}\cdot\text{recall}}{\text{precisión}+\text{recall}},
+\qquad
+F_\beta = (1+\beta^2)\,\frac{\text{precisión}\cdot\text{recall}}{\beta^2\,\text{precisión}+\text{recall}}.
+\end{equation}
+Se reporta el AUC como métrica interna (cumple la hipótesis $\ge 0,80$ y es estándar), y
+el F1 y la accuracy para comparar con el estado del arte, que se mide en esas dos.
 
-\begin{figure}[H]
+\section{Metodología de entrenamiento y validación}
+
+Esta sección describe el flujo desde la base de datos en crudo hasta la evaluación final,
+resumido en el esquema de la Figura~\ref{fig:pipeline}, y los tres problemas que hay que
+resolver para que la evaluación sea honesta.
+
+\begin{figure}[htbp]
 \centering
-\begin{subfigure}{0.48\textwidth}
-\includegraphics[width=\textwidth]{feat_importancia_perm}
-\caption{Importancia por permutación (caída de AUC).}
-\end{subfigure}\hfill
-\begin{subfigure}{0.48\textwidth}
-\includegraphics[width=\textwidth]{feat_importancia_acumulada}
-\caption{Importancia acumulada.}
-\end{subfigure}
-\caption{Una única característica léxica trivial carga con casi toda la señal, lo que da
-al detector su carácter interpretable.}
-\label{fig:imp}
+\includegraphics[width=\textwidth]{concept_pipeline}
+\caption{Flujo de trabajo: del dato en crudo a la evaluación en el test oficial.}
+\label{fig:pipeline}
 \end{figure}
 
-\paragraph{Decisión.} Mantenemos el conjunto completo de dieciocho características como
-base del detector, con la codificación de tarea y el coseno TF-IDF incluidos por su papel
-funcional. La redundancia está caracterizada y, si se busca parsimonia, siete
-características reproducen el rendimiento; conservamos las demás porque en el test no
-penalizan y aportan interpretabilidad por tarea.
+\subsection{Problema 1: dependencia de la partición}
 
-\section{Tratamiento del desbalance de clases}
+Las métricas dependen de cómo se parta el dato. Para no depender de una única partición se
+usa validación cruzada. Ahora bien, en RAGTruth varias respuestas comparten el mismo
+documento fuente, y si un documento aparece a la vez en entrenamiento y validación el
+modelo memoriza en lugar de generalizar, inflando el resultado. Por eso se usa
+\textbf{GroupKFold agrupando por \tc{source}}: cada documento cae entero en un solo fold
+(Figura~\ref{fig:gkf}). Un KFold aleatorio filtraría información entre folds. La cifra
+definitiva se reporta, además, sobre el \emph{split oficial de test} de RAGTruth, que
+permanece intacto durante todo el desarrollo.
 
-\subsection{Diagnóstico: dos poblaciones de falsos negativos}
-
-El detector deja pasar demasiadas alucinaciones, y esta es la preocupación central del
-capítulo. Antes de tratar el desbalance, distinguimos dos causas de falso negativo que
-exigen remedios distintos. El análisis de error por tarea (Figura~\ref{fig:err}) lo
-separa con claridad.
-
-La primera población vive en QA. Su AUC es 0,822, el mejor de las tres tareas, de modo
-que el modelo ordena las alucinaciones casi a la perfección; sin embargo, con un umbral
-global solo recupera el 54\,\% de ellas. Esto no es un problema de señal, sino de
-decisión: el umbral, calibrado para una prevalencia media, es demasiado alto para una
-tarea con solo un 18\,\% de positivos.
-
-La segunda población vive en Summary, y sí es un problema de señal. El texto alucinado de
-un resumen reutiliza el vocabulario del documento, así que comparte palabras con la
-fuente aunque el error sea evidente. Lo confirmamos midiendo el solape del propio tramo
-alucinado contra la fuente: en Summary es 0,62 de mediana, frente a 0,43 en Data2txt, y
-dentro de Summary los falsos negativos tienen más solape (0,641) que los aciertos
-(0,555). El modelo falla justo en los tramos camuflados, y ninguna característica de
-superficie los distingue del texto fiel.
-
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\begin{subfigure}{0.32\textwidth}
-\includegraphics[width=\textwidth]{err_prob_por_tarea}
-\caption{Probabilidad predicha por clase y tarea.}
-\end{subfigure}\hfill
-\begin{subfigure}{0.32\textwidth}
-\includegraphics[width=\textwidth]{err_span_containment}
-\caption{Solape del tramo alucinado por tarea.}
-\end{subfigure}\hfill
-\begin{subfigure}{0.32\textwidth}
-\includegraphics[width=\textwidth]{err_tipo_por_tarea}
-\caption{Composición de tipos por tarea.}
-\end{subfigure}
-\caption{El cuello de botella de Summary es el camuflaje léxico, no el tipo de
-alucinación. El tramo alucinado de un resumen comparte firma léxica con el texto fiel.}
-\label{fig:err}
+\includegraphics[width=0.72\textwidth]{concept_groupkfold}
+\caption{GroupKFold por documento: cada \tc{source} cae entero en un fold, sin fuga entre
+entrenamiento y validación.}
+\label{fig:gkf}
 \end{figure}
 
-\subsection{El umbral de decisión}
+\subsection{Problema 2: dependencia de los hiperparámetros}
 
-Si una parte de los falsos negativos es cuestión de umbral, la primera palanca es el
-umbral mismo. Comparamos tres criterios, todos con los umbrales fijados en el
-entrenamiento y aplicados al test: el índice de Youden global, que es el criterio de
-partida; el máximo de F1 por tarea; y el máximo de F2 por tarea, que pondera el recall
-cuatro veces más que la precisión y penaliza el falso negativo. El
-Cuadro~\ref{tab:umbral} recoge el efecto por tarea, y la Figura~\ref{fig:barrido}
-muestra cómo cada métrica cambia al mover el umbral.
+Los modelos con hiperparámetros pueden sobreajustarlos. Para elegirlos se usa
+\emph{grid search}: se prueban combinaciones de hiperparámetros y se conserva la de mejor
+F1 en validación cruzada, sin tocar el test. Por ejemplo, optimizar tres hiperparámetros
+con tres valores cada uno con validación cruzada de cinco iteraciones exige
+$3\cdot3\cdot3\cdot5=135$ ajustes.
 
-\begin{table}[H]
+\subsection{Problema 3: el desbalance y el punto de decisión}
+\label{sec:desb-trat}
+
+El tercer problema es propio de este trabajo. Como la prevalencia difiere por tarea
+(sección~\ref{sec:desb-intro}), un único umbral es subóptimo. La Figura~\ref{fig:umbral}
+(izquierda) muestra cómo varían precisión, recall y F1 al mover el umbral. Se comparan tres
+criterios, todos con el umbral fijado en entrenamiento y aplicado al test: el índice de
+Youden global, el máximo de F1 por tarea, y el máximo de $F_2$ por tarea. El umbral
+\emph{por tarea} (Figura~\ref{fig:umbral}, derecha) reconoce que cada tarea opera a una
+prevalencia distinta y recupera falsos negativos donde el umbral global los dejaba pasar,
+a costa de precisión. Como se verá en la sección~\ref{sec:winner}, el umbral por tarea
+recorta los falsos negativos de 285 a 125.
+
+\begin{figure}[htbp]
 \centering
-\small
-\begin{tabular}{llccccc}
-\toprule
-Estrategia & ámbito & F1 & precisión & recall & accuracy & FN \\
-\midrule
-Youden global & Global (pooled) & 0,682 & 0,684 & 0,680 & 0,779 & 302 \\
- & Data2txt & 0,821 & 0,765 & 0,884 & 0,751 & 67 \\
- & QA & 0,513 & 0,486 & 0,544 & 0,817 & 73 \\
- & Summary & 0,287 & 0,472 & 0,206 & 0,768 & 162 \\
-\midrule
-Por tarea (max-F1) & Global (pooled) & 0,656 & 0,547 & 0,821 & 0,700 & \textbf{169} \\
- & Data2txt & 0,821 & 0,766 & 0,884 & 0,752 & 67 \\
- & QA & 0,492 & 0,357 & 0,794 & 0,709 & \textbf{33} \\
- & Summary & \textbf{0,453} & 0,344 & 0,662 & 0,638 & \textbf{69} \\
-\midrule
-Por tarea (max-F2) & Global (pooled) & 0,577 & 0,409 & 0,982 & 0,497 & 17 \\
- & Data2txt & 0,786 & 0,648 & 1,000 & 0,650 & 0 \\
- & QA & 0,391 & 0,244 & 0,981 & 0,457 & 3 \\
- & Summary & 0,407 & 0,261 & 0,931 & 0,386 & 14 \\
-\bottomrule
-\end{tabular}
-\caption{Estrategias de umbral sobre el test oficial. El umbral por tarea recupera el
-44\,\% de los falsos negativos (de 302 a 169) y triplica el recall de Summary, a costa
-de precisión. F2 lleva el recall casi a uno pero hunde la accuracy.}
-\label{tab:umbral}
-\end{table}
-
-\begin{figure}[H]
-\centering
-\begin{subfigure}{0.48\textwidth}
-\includegraphics[width=\textwidth]{desb_barrido_umbral}
-\caption{Barrido de umbral (OOF de train).}
-\label{fig:barrido}
-\end{subfigure}\hfill
-\begin{subfigure}{0.48\textwidth}
-\includegraphics[width=\textwidth]{desb_estrategias_umbral}
-\caption{Estrategias por tarea (test).}
-\end{subfigure}
-\caption{El umbral desliza el punto de operación entre precisión y recall. Un umbral por
-tarea reconoce que cada tarea tiene una prevalencia distinta.}
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\textwidth]{desb_barrido_umbral}\caption{Métricas frente al umbral (OOF).}\end{subfigure}\hfill
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\textwidth]{desb_estrategias_umbral}\caption{Estrategias de umbral por tarea (test).}\end{subfigure}
+\caption{El umbral desliza el punto de operación entre precisión y recall; un umbral por
+tarea se adapta a cada prevalencia.}
+\label{fig:umbral}
 \end{figure}
 
-El F1 global admite dos lecturas que conviene separar. El F1 \emph{pooled}, calculado
-sobre todas las respuestas juntas, baja con el umbral por tarea, de 0,682 a 0,656, porque
-la caída de precisión pesa en el agregado. El F1 \emph{macro}, media de los tres F1 por
-tarea, sube de 0,540 a 0,589, porque recompensa la mejora en Summary. Reportamos los dos:
-el pooled es el que suele dar la literatura, y el macro refleja mejor la mejora donde
-importa.
+\section{Marco de trabajo}
 
-Aquí surge una tentación que conviene desmentir. Fijar el umbral por máximo de F1 no da
-un premio gratis en el agregado: el máximo de F1 global fijado en entrenamiento
-generaliza peor al test que Youden, porque la prevalencia de entrenamiento (0,445) no es
-la del test (0,349), y el umbral bajo que maximiza F1 en entrenamiento resulta demasiado
-agresivo fuera. La ganancia real del umbral por tarea no es en F1 pooled, sino en recall
-y en el F1 de la tarea difícil.
+El detector se implementa como una librería instalable, \tc{ragcheck}, que descarga
+RAGTruth, construye las características, entrena y evalúa los modelos y sirve la inferencia.
+Cada resultado de este capítulo es reproducible con semilla fija (42): mismo código y
+mismos datos producen siempre el mismo resultado. Los scripts de reentrenamiento y
+evaluación son atómicos, de modo que cada cifra tiene una fuente única y trazable.
 
-\subsection{Corrección de prior de Saerens}
+\section{Resultados por modelo}
 
-Si el problema de QA es que la prevalencia del test difiere de la del entrenamiento, un
-remedio más principiado que mover el umbral a mano es corregir el prior. El método de
-Saerens \cite{saerens2002} estima la prevalencia del test sin usar sus etiquetas, por un
-procedimiento de esperanza-maximización sobre los propios scores, y reajusta el posterior
-del clasificador a esa prevalencia. Lo probamos sobre probabilidades ya calibradas por
-regresión isotónica.
+El propósito de esta sección es presentar los resultados de cada clasificador clásico
+sobre el conjunto de once variables, y elegir el mejor. Para cada modelo se indican sus
+hiperparámetros óptimos (por grid search con GroupKFold) y sus métricas en el test oficial,
+con la curva ROC. El umbral es el de Youden.
 
-El método colapsa. La estimación por esperanza-maximización converge a priores
-degenerados: 1,000 en Data2txt, 0,000 en QA y 0,000 en Summary, frente a los reales
-0,643, 0,178 y 0,227 (Figura~\ref{fig:saerens}). Con priores 0 y 1 la decisión se vuelve
-trivial, todo alucinado en Data2txt y nada en QA ni Summary. La causa es que las
-distribuciones de score de las dos clases se solapan demasiado, sobre todo en Summary,
-para que el procedimiento identifique la proporción de mezcla. La vía queda descartada
-con evidencia.
+\subsection{Regresión logística}
+La regresión logística \cite{cox1958logreg} modela la probabilidad de alucinación con una
+función sigmoide de una combinación lineal de las características. El grid search elige
+regularización \tc{C}${}=0,3$ con \tc{class\_weight}${}=$balanced. Alcanza AUC 0,806 y F1
+0,658 (Cuadro~\ref{tab:modelos}); su recall es el más alto (0,749) por el reponderado de
+clases, a costa de precisión.
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.7\textwidth]{desb_saerens_colapso}
-\caption{Corrección de prior de Saerens. El prior estimado por esperanza-maximización
-colapsa a 0 o 1 y no recupera la prevalencia real. Resultado negativo.}
-\label{fig:saerens}
-\end{figure}
+\subsection{K vecinos más cercanos}
+KNN \cite{cover1967knn} clasifica según las clases de los $k$ vecinos más próximos, sobre
+las características estandarizadas. El grid search elige $k=25$ vecinos ponderados por
+distancia. Da AUC 0,826 y F1 0,681, un rendimiento sólido.
 
-\subsection{Remuestreo y aprendizaje sensible al coste}
+\subsection{Máquina de vectores de soporte}
+La SVM de núcleo RBF \cite{cortes1995svm} busca una frontera de máximo margen en un espacio
+transformado, sobre las características estandarizadas. El grid search elige \tc{C}${}=10$.
+Obtiene AUC 0,813 y el mejor F1 (0,690) y accuracy (0,784) de los cinco.
 
-Queda la idea más intuitiva: reequilibrar las clases antes de entrenar, igualando las
-alucinaciones por tarea. Probamos sobremuestreo aleatorio, submuestreo aleatorio y
-SMOTE \cite{chawla2002smote}, siempre por tarea y solo en entrenamiento, y también el
-aprendizaje sensible al coste, que penaliza el falso negativo con un peso de clase. La
-pregunta correcta no es qué le pasa al F1 a un umbral fijo, sino si el tratamiento mueve
-la frontera, es decir, la separación real entre clases medida por el AUC-PR, que no
-depende del umbral.
+\subsection{Bosque aleatorio}
+El bosque aleatorio \cite{breiman2001rf} promedia muchos árboles de decisión sobre
+submuestras. El grid search elige profundidad máxima 20. Alcanza AUC 0,830 y F1 0,676.
 
-\begin{table}[H]
-\centering
-\begin{tabular}{lccc}
-\toprule
-Estrategia & Data2txt & QA & Summary \\
-\midrule
-Base (sin tratar) & 0,858 & 0,528 & 0,410 \\
-Sobremuestreo por tarea & 0,853 & 0,532 & 0,390 \\
-Submuestreo por tarea & 0,854 & 0,543 & 0,409 \\
-SMOTE por tarea & 0,855 & 0,533 & 0,357 \\
-Sensible al coste & 0,857 & 0,528 & 0,403 \\
-\bottomrule
-\end{tabular}
-\caption{AUC-PR por tarea según el tratamiento del desbalance en el entrenamiento.
-Ninguna variante mueve la frontera; SMOTE la empeora en Summary. Reequilibrar clases no
-crea señal.}
-\label{tab:frontera}
-\end{table}
+\subsection{Gradient boosting (XGBoost)}
+XGBoost \cite{friedman2001gbm,chen2016xgboost} construye árboles secuencialmente,
+corrigiendo el error del conjunto anterior. El grid search elige profundidad 6 y tasa de
+aprendizaje 0,05. Es el mejor en AUC (0,837) y en el promedio F1--AUC
+(Figura~\ref{fig:roc-xgb}).
 
-El Cuadro~\ref{tab:frontera} y la Figura~\ref{fig:frontera} lo muestran sin ambigüedad:
-la frontera por tarea no se mueve, y SMOTE la empeora en Summary. El AUC-PR global cae
-con el remuestreo por tarea porque distorsiona la ordenación entre tareas. Lo que SMOTE
-parece ganar a un umbral fijo, subir el recall de Summary, es un espejismo: entrena a
-50/50, infla los scores y hace que el mismo umbral actúe como uno más bajo. El modelo
-limpio con umbral por tarea lo domina, con mejor F1 de Summary (0,453 frente a 0,429),
-menos falsos negativos y mejor frontera. La Figura~\ref{fig:fn} resume la comparación en
-la moneda que nos importa, los falsos negativos totales.
+\begin{figure}[htbp]\centering\includegraphics[width=0.44\textwidth]{roc_xgboost}
+\caption{Curva ROC de XGBoost (test).}\label{fig:roc-xgb}\end{figure}
 
-\begin{figure}[H]
-\centering
-\begin{subfigure}{0.55\textwidth}
-\includegraphics[width=\textwidth]{desb_frontera_remuestreo}
-\caption{Frontera (AUC-PR) por estrategia.}
-\label{fig:frontera}
-\end{subfigure}\hfill
-\begin{subfigure}{0.42\textwidth}
-\includegraphics[width=\textwidth]{desb_fn_recuperados}
-\caption{Falsos negativos totales.}
-\label{fig:fn}
-\end{subfigure}
-\caption{El remuestreo no mueve la frontera. El umbral por tarea recupera más falsos
-negativos que SMOTE, sobre una frontera mejor.}
-\end{figure}
+\subsection{Comparación y modelo ganador}
+\label{sec:winner}
 
-Las matrices de confusión por tarea (Figura~\ref{fig:conf}) cierran el argumento
-visualmente: al pasar del umbral global al umbral por tarea, los falsos negativos de QA
-bajan de 73 a 33 y los de Summary de 162 a 69, a cambio de más falsos positivos.
+Para elegir el mejor modelo se usa, como criterio, el promedio entre F1 y AUC. El
+Cuadro~\ref{tab:modelos} recoge las métricas de los cinco y la Figura~\ref{fig:roc-all} sus
+curvas. Las diferencias son pequeñas: los cinco superan el AUC 0,80 de la hipótesis. El
+mejor por promedio F1--AUC es \textbf{XGBoost} (0,763), que combina el mejor AUC con una
+buena calibración; será el modelo de referencia. Conviene notar que estas once variables
+igualan al conjunto completo de dieciocho (XGBoost con dieciocho da AUC 0,835), lo que
+confirma que la selección no pierde señal.
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=\textwidth]{eval_confusion_por_tarea}
-\caption{Matrices de confusión por tarea (XGBoost, test oficial). La fila superior usa
-umbral global; la inferior, umbral por tarea. La diagonal de aciertos de alucinación
-crece en QA y Summary.}
-\label{fig:conf}
-\end{figure}
-
-\paragraph{Decisión.} Adoptamos como punto de operación el umbral por tarea que maximiza
-F1, fijado en el entrenamiento. Es la única palanca honesta contra los falsos negativos:
-recupera el 44\,\% de ellos y hace competitivo el F1 de Summary sin tocar las
-características ni el modelo. Descartamos, con prueba, la corrección de prior de Saerens,
-el remuestreo en sus tres variantes y el aprendizaje sensible al coste, porque no mueven
-la frontera.
-
-\section{Modelos y evaluación honesta}
-
-Evaluamos cinco clasificadores clásicos: regresión logística \cite{cox1958logreg},
-$k$ vecinos más cercanos \cite{cover1967knn}, máquina de vectores de soporte
-\cite{cortes1995svm}, bosque aleatorio \cite{breiman2001rf} y gradient boosting sobre
-árboles \cite{friedman2001gbm,chen2016xgboost}. Cada uno se ajusta por búsqueda en
-rejilla con \texttt{GroupKFold}, y se evalúa sobre el test oficial. El
-Cuadro~\ref{tab:modelos} recoge las métricas por secciones, con el umbral por Youden y el
-intervalo de confianza del AUC por bootstrap \cite{efron1979bootstrap}.
-
-\begin{table}[H]
+\begin{table}[htbp]
 \centering
 \small
 \begin{tabular}{lccccccc}
 \toprule
-Modelo & AUC-ROC & IC 95\,\% & AUC-PR & F1 & precisión & recall & ECE \\
+Modelo & AUC & F1 & precisión & recall & accuracy & bal-acc & prom.\ F1--AUC \\
 \midrule
-Random Forest & \textbf{0,836} & [0,820, 0,851] & 0,745 & 0,680 & 0,651 & 0,710 & 0,069 \\
-XGBoost & 0,835 & [0,819, 0,849] & 0,748 & 0,684 & 0,698 & 0,671 & \textbf{0,063} \\
-KNN & 0,826 & [0,810, 0,841] & 0,735 & 0,678 & 0,628 & 0,737 & 0,065 \\
-SVM & 0,819 & [0,801, 0,837] & 0,732 & \textbf{0,692} & 0,700 & 0,685 & 0,068 \\
-Regresión logística & 0,816 & [0,800, 0,832] & 0,711 & 0,670 & 0,643 & 0,700 & 0,111 \\
+\textbf{XGBoost} & \textbf{0,837} & 0,688 & 0,685 & 0,691 & 0,781 & 0,760 & \textbf{0,763} \\
+KNN & 0,826 & 0,681 & 0,665 & 0,698 & 0,771 & 0,754 & 0,754 \\
+Bosque aleatorio & 0,830 & 0,676 & 0,679 & 0,672 & 0,774 & 0,751 & 0,753 \\
+SVM & 0,813 & 0,690 & 0,693 & 0,686 & 0,784 & 0,762 & 0,751 \\
+Reg.\ logística & 0,806 & 0,658 & 0,587 & 0,749 & 0,729 & 0,733 & 0,732 \\
 \bottomrule
 \end{tabular}
-\caption{Comparativa de los cinco modelos en el test oficial (umbral por Youden). El AUC
-supera el umbral 0,80 de la hipótesis. XGBoost combina buen AUC con la mejor calibración.}
+\caption{Comparación de los cinco modelos en el test oficial (once variables, umbral de
+Youden). Ganador por promedio F1--AUC: XGBoost.}
 \label{tab:modelos}
 \end{table}
 
-Los cinco modelos superan el umbral 0,80 de la hipótesis falsable. Las diferencias entre
-ellos son pequeñas y sus intervalos de confianza se solapan. Elegimos XGBoost como
-modelo de referencia porque combina un AUC entre los mejores con la mejor calibración,
-medida por el error de calibración esperado. Las curvas ROC y precisión-recall, tanto en
-validación cruzada como en el test oficial, aparecen en la Figura~\ref{fig:roc}.
-
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
-\begin{subfigure}{0.48\textwidth}
-\includegraphics[width=\textwidth]{roc_test}
-\caption{Curvas ROC (test oficial).}
-\end{subfigure}\hfill
-\begin{subfigure}{0.48\textwidth}
-\includegraphics[width=\textwidth]{pr_test}
-\caption{Curvas precisión-recall (test oficial).}
-\end{subfigure}
-\caption{Discriminación de los cinco modelos sobre el test oficial.}
-\label{fig:roc}
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\textwidth]{roc_test_rfe}\caption{Curvas ROC.}\end{subfigure}\hfill
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\textwidth]{pr_test_rfe}\caption{Curvas precisión-recall.}\end{subfigure}
+\caption{Discriminación de los cinco modelos sobre el test oficial (once variables).}
+\label{fig:roc-all}
 \end{figure}
 
-El desglose por tarea (Figura~\ref{fig:roctask}) confirma el diagnóstico: Data2txt y QA
-se separan bien, con AUC en torno a 0,78 y 0,82, mientras Summary se queda en 0,70. La
-paradoja de que QA tenga el mejor AUC y a la vez un F1 modesto se explica por la
-prevalencia, no por la separación. La calibración
-(Figura~\ref{fig:calib}) es razonable en crudo y mejora con regresión isotónica
-\cite{platt1999}, lo que da probabilidades fiables para fijar el umbral.
+\subsection{El ganador por tarea y su calibración}
 
-\begin{figure}[H]
+El desglose por tarea del ganador (Cuadro~\ref{tab:portarea}) revela dónde está la
+dificultad. Data2txt y QA se separan bien (AUC 0,79 y 0,82); Summary se queda en 0,70. La
+paradoja de que QA tenga el mejor AUC y a la vez un F1 modesto se explica por la
+prevalencia: con solo un 18\,\% de positivos, un umbral global calla los positivos y el
+recall se hunde (0,525). Aquí actúa el umbral por tarea de la
+sección~\ref{sec:desb-trat}: al fijarlo por tarea, los falsos negativos totales bajan de
+285 a 125 (Figura~\ref{fig:fn}), el recall de QA sube a 0,831 y el F1 de Summary de 0,358 a
+0,454. La calibración del ganador es buena y mejora con regresión isotónica
+\cite{platt1999} (Figura~\ref{fig:cal}), lo que da probabilidades fiables para fijar el
+umbral. Las matrices de confusión por tarea (Figura~\ref{fig:conf}) muestran visualmente el
+recorte de falsos negativos.
+
+\begin{table}[htbp]
 \centering
-\begin{subfigure}{0.48\textwidth}
-\includegraphics[width=\textwidth]{eval_roc_pr_por_tarea}
-\caption{ROC y precisión-recall por tarea.}
-\label{fig:roctask}
-\end{subfigure}\hfill
-\begin{subfigure}{0.48\textwidth}
-\includegraphics[width=\textwidth]{eval_calibracion}
-\caption{Diagrama de fiabilidad.}
-\label{fig:calib}
-\end{subfigure}
-\caption{Evaluación desagregada y calibración de XGBoost sobre el test oficial.}
+\small
+\begin{tabular}{lcccccc}
+\toprule
+Tarea & prev.\ & AUC & F1 & recall & accuracy & FN \\
+\midrule
+Data2txt & 0,643 & 0,786 & 0,824 & 0,891 & 0,754 & 63 \\
+QA & 0,178 & 0,817 & 0,490 & 0,525 & 0,806 & 76 \\
+Summary & 0,227 & 0,702 & 0,358 & 0,284 & 0,769 & 146 \\
+\midrule
+Global & 0,349 & 0,837 & 0,685 & 0,698 & 0,776 & 285 \\
+\bottomrule
+\end{tabular}
+\caption{XGBoost por tarea (test oficial, umbral de Youden global). QA discrimina bien
+(AUC 0,82) pero calla positivos por su baja prevalencia.}
+\label{tab:portarea}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\begin{subfigure}{0.44\textwidth}\includegraphics[width=\textwidth]{desb_fn_recuperados}\caption{Falsos negativos por estrategia.}\label{fig:fn}\end{subfigure}\hfill
+\begin{subfigure}{0.52\textwidth}\includegraphics[width=\textwidth]{eval_calibracion}\caption{Diagrama de fiabilidad.}\label{fig:cal}\end{subfigure}
+\caption{El umbral por tarea recorta el falso negativo; la calibración es buena y mejora
+con isotónica.}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{eval_confusion_por_tarea}
+\caption{Matrices de confusión por tarea (XGBoost, test). Fila superior: umbral global;
+fila inferior: umbral por tarea. La detección de alucinaciones crece en QA y Summary.}
+\label{fig:conf}
 \end{figure}
 
 \section{Comparación con el estado del arte}
 
-Situamos por fin el detector frente a la literatura sobre RAGTruth, que se mide en F1 a
-nivel de respuesta y en accuracy, no en AUC. El Cuadro~\ref{tab:lit} y la
-Figura~\ref{fig:lit} recogen la comparación por tarea. Nuestras cifras son las del punto
-de operación por tarea sobre el test oficial.
+El estado del arte sobre RAGTruth se mide en F1 a nivel de respuesta y en accuracy, no en
+AUC. El Cuadro~\ref{tab:lit} y la Figura~\ref{fig:lit} sitúan nuestro detector por tarea.
 
-\begin{table}[H]
+\paragraph{Nota de comparabilidad.} Todas las cifras están sobre RAGTruth y sobre la misma
+métrica (F1 a nivel de respuesta en el split oficial), pero los métodos de la literatura
+son \emph{neuronales o basados en LLM} (encoders finetuneados o modelos de lenguaje como
+juez), mientras el nuestro es clásico sobre características léxicas. Además, la tabla de
+accuracy (Lynx) se reporta sobre el subconjunto de RAGTruth incluido en HaluBench, no
+sobre el split idéntico, y la literatura no publica su desglose por tarea. Se comparan, por
+tanto, cifras sobre el mismo problema y benchmark, no el mismo tipo de modelo.
+
+\begin{table}[htbp]
 \centering
 \small
 \begin{tabular}{lcccc}
 \toprule
-Método & QA & Data2txt & Summary & Global \\
+Método (F1 nivel respuesta, \%) & QA & Data2txt & Summary & Global \\
 \midrule
 GPT-4-turbo (juez) & 45,6 & 78,3 & 47,6 & 63,4 \\
 Luna (encoder ligero) & 51,3 & 75,9 & 52,5 & 65,4 \\
-LettuceDetect-large (396M) & 70,2 & 88,5 & 59,7 & 79,2 \\
+LettuceDetect-base (150M) & 65,5 & 87,9 & 50,5 & 76,1 \\
 Fine-tuned Llama-2-13B & 68,2 & 88,1 & 59,1 & 78,7 \\
-RAG-HAT (mejor) & 74,8 & 91,6 & 67,6 & \textbf{83,9} \\
+LettuceDetect-large (396M) & 70,2 & 88,5 & 59,7 & 79,2 \\
+RAG-HAT (mejor) & 74,8 & 91,6 & 67,6 & 83,9 \\
 \midrule
-\textbf{Este trabajo (clásico)} & 49,2 & 82,1 & 45,3 & 65,6 / 68,4 \\
+\textbf{Este trabajo (clásico)} & 46,3 & 82,0 & 45,4 & 68,5 \\
 \bottomrule
 \end{tabular}
-\caption{F1 a nivel de respuesta (\%) sobre RAGTruth, recopilado por Kovács et al.
-\cite{kovacs2025lettucedetect}, con RAG-HAT \cite{song2024raghat} como cota alta.
-Nuestra columna global da el F1 macro por tarea (65,6) y el F1 pooled con umbral de
-Youden (68,4). El patrón universal se repite: Data2txt fácil, QA y Summary difíciles.}
+\caption{F1 por tarea sobre RAGTruth, recopilado por Kovács et al.
+\cite{kovacs2025lettucedetect} con RAG-HAT \cite{song2024raghat} como cota alta. Nuestro
+F1 por tarea usa umbral por tarea; el global (68,5) es el F1 \emph{pooled} con umbral de
+Youden (el F1 macro por tarea es 55,7).}
 \label{tab:lit}
 \end{table}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
 \centering
 \includegraphics[width=\textwidth]{lit_comparacion_f1}
-\caption{F1 por tarea, nuestro detector clásico frente a la literatura. La brecha se
+\caption{F1 por tarea: nuestro detector clásico frente a la literatura. La brecha se
 concentra en Summary, la tarea que nadie resuelve con solvencia.}
 \label{fig:lit}
 \end{figure}
 
-La lectura honesta es doble. En F1 global superamos al juez GPT-4-turbo (63,4) y a Luna
-(65,4), y quedamos unos diez puntos por debajo de los modelos ajustados, LettuceDetect
-(79,2), Llama-2-13B (78,7) y RAG-HAT (83,9). En accuracy sobre el subset RAGTruth, la
-referencia es Lynx \cite{ravi2024lynx}, con Lynx-8B en 80,0 y GPT-4o en 84,3, mientras
-nuestra accuracy ronda 0,74–0,78. El patrón por tarea es el mismo para todos: Data2txt
-alrededor del 88--92\,\%, QA y Summary mucho más bajos. Chocamos contra el mismo muro
-que modelos de miles de millones de parámetros, solo un poco antes. Un detalle refuerza
-el valor del resultado: trabajos que analizan RAGTruth por activaciones sostienen que la
-etiqueta apenas se correlaciona con diferencias de texto de superficie, de modo que
-alcanzar 0,82--0,84 de AUC con características léxicas no es trivial.
+En accuracy, la referencia es Lynx \cite{ravi2024lynx}: GPT-3.5-turbo 50,7\,\%,
+Claude-3-Sonnet 79,1\,\%, Lynx-8B 80,0\,\%, Lynx-70B 80,2\,\% y GPT-4o 84,3\,\%; nuestra
+accuracy es 77,6\,\%. La lectura honesta es doble. En F1 global superamos al juez
+GPT-4-turbo (63,4) y a Luna (65,4), y quedamos unos diez puntos por debajo de los modelos
+neuronales ajustados. El patrón por tarea es el mismo para todos: Data2txt fácil
+(88--92\,\%), QA y Summary mucho más bajos. Chocamos contra el mismo muro que modelos de
+miles de millones de parámetros, solo un poco antes, a coste cero y en CPU.
+
+\section{Exploración: vías descartadas}
+
+El resultado anterior es el destilado de una exploración amplia. Se recogen aquí, de forma
+condensada, las vías que no funcionaron, porque forman parte de la caracterización del
+problema.
+
+\paragraph{Características que no aportaron.} Se probaron y descartaron, todas medidas con
+el protocolo honesto: LSA (TF-IDF con descomposición en valores singulares truncada
+\cite{deerwester1990lsa}), que aportó $+0,001$ de AUC; la novedad de $n$-gramas por frase,
+$+0,001$; y características estructurales de spaCy (arcos de dependencia, sujeto-verbo-objeto,
+enlace entidad-número), que dejaron Summary en $0,701\to0,700$.
+
+\paragraph{Tratamiento del desbalance que no movió la frontera.} Reequilibrar las clases no
+crea señal: el sobremuestreo, el submuestreo, SMOTE \cite{chawla2002smote} y el aprendizaje
+sensible al coste dejan la frontera (AUC-PR por tarea) plana o peor
+(Figura~\ref{fig:frontera}). La corrección de prior de Saerens \cite{saerens2002} colapsa:
+su estimación por esperanza-maximización converge a prevalencias degeneradas (0 o 1), como
+muestra la Figura~\ref{fig:saerens}. La única palanca honesta contra el falso negativo es
+el umbral por tarea de la sección~\ref{sec:desb-trat}.
+
+\begin{figure}[htbp]
+\centering
+\begin{subfigure}{0.52\textwidth}\includegraphics[width=\textwidth]{desb_frontera_remuestreo}\caption{Frontera por estrategia.}\label{fig:frontera}\end{subfigure}\hfill
+\begin{subfigure}{0.44\textwidth}\includegraphics[width=\textwidth]{desb_saerens_colapso}\caption{Saerens: prior estimado vs.\ real.}\label{fig:saerens}\end{subfigure}
+\caption{Reequilibrar clases no mueve la frontera; la corrección de prior de Saerens
+colapsa. Resultados negativos.}
+\end{figure}
+
+\paragraph{El techo de Summary.} Summary es un techo estructural del enfoque léxico. Un
+resumen reutiliza el vocabulario del documento, así que el tramo alucinado comparte
+palabras con la fuente aunque el error sea evidente: su solape es 0,62 de mediana frente a
+0,43 en Data2txt, y dentro de Summary los falsos negativos tienen más solape (0,641) que
+los aciertos (0,555) (Figura~\ref{fig:err}). Ninguna característica de superficie distingue
+el resumen fiel del alucinado.
+
+\begin{figure}[htbp]
+\centering
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\textwidth]{err_span_containment}\caption{Solape del tramo alucinado por tarea.}\end{subfigure}\hfill
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\textwidth]{err_prob_por_tarea}\caption{Probabilidad predicha por clase y tarea.}\end{subfigure}
+\caption{El cuello de botella de Summary es el camuflaje léxico, no el tipo de alucinación.}
+\label{fig:err}
+\end{figure}
 
 \section{Conclusiones}
 
-Recogemos las conclusiones objetivo por objetivo, como cierre del caso de estudio.
+\paragraph{Hipótesis.} Se cumple. Los cinco clasificadores clásicos superan el AUC-ROC de
+0,80 sobre el test oficial con evaluación honesta, y el mejor, XGBoost, alcanza 0,837 con
+solo once características léxicas seleccionadas por RFE.
 
-\paragraph{Hipótesis falsable.} Se cumple. Los cinco clasificadores clásicos superan el
-AUC-ROC de 0,80 sobre el test oficial de RAGTruth con evaluación honesta, y el mejor
-alcanza 0,836. Un clasificador clásico sobre características léxicas separa alucinación
-de texto fiel con solvencia.
-
-\paragraph{Falsos negativos y desbalance.} El déficit de recall no se debía a las
-características ni al balance de clases, sino al punto de decisión bajo un desbalance
-heterogéneo y con desplazamiento de prior. Un umbral por tarea recupera el 44\,\% de los
-falsos negativos y hace competitivo el F1 de Summary. La corrección de prior de Saerens,
-el remuestreo y el aprendizaje sensible al coste se descartaron con evidencia por no
-mover la frontera.
-
-\paragraph{El techo de Summary.} Está caracterizado, no supuesto. Cuatro familias de
-características fracasan en Summary por la misma razón: resumir es recombinar, y el texto
-fiel comparte la firma léxica con el alucinado. Es la frontera entre la minería clásica
-de superficie y la semántica profunda, y el estado del arte, con modelos mucho mayores,
-tropieza con el mismo muro.
+\paragraph{Falsos negativos y desbalance.} El déficit de detección no era de
+características ni de balance de clases, sino del punto de decisión bajo un desbalance
+heterogéneo. Un umbral por tarea recupera casi la mitad de los falsos negativos (de 285 a
+125) y hace competitivo el F1 de Summary. La corrección de prior, el remuestreo y el
+aprendizaje sensible al coste se descartaron con evidencia.
 
 \paragraph{Posicionamiento.} El detector rinde por encima del juez GPT-4-turbo y de Luna,
-y a unos diez puntos de los detectores ajustados, a coste cero, en CPU, de forma
-interpretable y determinista. Reproduce a bajo coste lo que hoy hace un evaluador basado
-en modelos de lenguaje, y acota con precisión hasta dónde llega lo léxico.
+y a unos diez puntos de los detectores neuronales ajustados, a coste cero, en CPU, de forma
+interpretable y determinista. El techo de Summary queda caracterizado, no supuesto: es la
+frontera entre la minería léxica de superficie y la semántica profunda, y el estado del
+arte, con modelos mucho mayores, tropieza con el mismo muro.
 
 \bibliographystyle{plain}
 \bibliography{referencias}
