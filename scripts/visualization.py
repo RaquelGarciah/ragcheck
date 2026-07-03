@@ -68,13 +68,16 @@ def main() -> None:
     ax.set_title("Correlación de features y etiqueta")
     savefig(fig, "eda_correlacion")
 
-    # 6. Separabilidad por clase de cada feature.
-    long = X.assign(clase=df["clase"].values).melt(
+    # 6. Separabilidad por clase de cada feature (solo las continuas; las
+    # one-hot de tarea son binarias y su KDE no informa).
+    cont = [c for c in X.columns if not c.startswith("task_")]
+    long = X[cont].assign(clase=df["clase"].values).melt(
         id_vars="clase", var_name="feature", value_name="valor"
     )
     g = sns.displot(
         long, x="valor", hue="clase", col="feature", col_wrap=3,
-        kind="kde", common_norm=False, fill=True, height=2.6, facet_kws={"sharex": False},
+        kind="kde", common_norm=False, fill=True, height=2.4,
+        facet_kws={"sharex": False, "sharey": False},
     )
     g.set_titles("{col_name}")
     savefig(g.figure, "eda_separabilidad_features")
