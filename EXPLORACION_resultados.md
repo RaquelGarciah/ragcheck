@@ -304,13 +304,23 @@ señales independientes en 13 features.
 De 7 a 18 features: +0,006 AUC, +0,004 F1, +0,005 acc (ruido).
 
 **Veredicto:** no hay overfitting peligroso (en test el rendimiento no cae al
-añadir features), pero **11 de 18 son redundantes**. **Subconjunto recomendado
-(7):** `containment`, `answer_len`, `num_overlap`, `jaccard`, `neg_diff`,
-`num_context`, `sent_sim_min`.
+añadir features), pero **11 de 18 son redundantes**.
+
+**CORRECCIÓN (con varios wrappers).** El primer subconjunto que propuse salió de
+un *único* criterio —importancia por permutación— que **infravalora el one-hot de
+tarea** (al permutar una columna, las otras dos y `containment` recuperan la info).
+Con **RFE** y **backward elimination (AUC)**, `task_QA` sale top-3. El set óptimo
+corregido, validado en test:
+
+**Subconjunto definitivo (RFE top-7):** `containment`, `task_QA`, `num_context`,
+`task_Summary`, `answer_len`, `jaccard`, `sent_cont_min` → **AUC 0,835 / F1 0,676 /
+acc 0,781**, iguala a las 18 y supera al set anterior. Incluye el one-hot (con
+`task_Data2txt` redundante = k−1 dummies). top-10 añade `novel_bigram`,
+`num_overlap`, `sent_sim_min` (mismo AUC, +recall).
 
 Figuras: `fsel_{logreg,knn,svm,random_forest,xgboost}`, `feat_correlacion`,
-`feat_importancia_perm`, `feat_podado_test`.
-Informe: `outputs/reports/feature_selection.md`.
+`feat_importancia_perm`, `feat_podado_test`, `pr_top7`, `pr_top10`.
+Informes: `outputs/reports/feature_selection.md`, `umbrales_y_desbalance.md`.
 
 ---
 
@@ -323,11 +333,16 @@ Todas medidas con el mismo protocolo honesto y **descartadas con datos** (criter
 |---|---|---|---|
 | **LSA** | TF-IDF + TruncatedSVD por fold | AUC +0,001 como añadido *y* como reemplazo de `tfidf_cos` | redundante con `containment`; misma señal, peor |
 | **`sent_novel`** | novedad de n-gramas por frase | +0,001 global | el resumen fiel recombina igual |
-| **Umbral max-F1** | umbral por F1 en vez de Youden | test 0,681→0,674 ⬇ | no generaliza (prevalencia train≠test) |
 | **spaCy estructural** | dep. arcs / SVO / entidad-número | Summary 0,701→0,700 | resumen fiel recombina las dependencias |
+| **Weak supervision (frase)** | spans→etiquetas de frase, agrega por max | reemplazo hunde AUC (0,744); híbrido +0,006 F1 | redundante con `sent_cont_min`; no necesita spans |
+| **Auto-consistencia** | máx. desacuerdo entre frases (sin fuente) | AUC sola 0,59; +0 al modelo | dentro de 1 respuesta el desacuerdo es diversidad, no alucinación (SelfCheckGPT necesita varias muestras) |
+| **Umbral max-F1 / por tarea** | umbral por F1 o por tarea, no Youden | test 0,681→0,674; por-tarea agregado 0,61 | no generaliza (prevalencia train≠test); break-even se rompe en Summary (F1=0) |
+| **Remuestreo 50/50** | SMOTE/undersample/`scale_pos_weight` | AUC-PR invariante (0,750); ≡ mover umbral | reequilibra el prior, desliza por la curva PR sin levantarla |
 
 Nota: quitar `tfidf_cos` del todo tampoco cambia el AUC (0,824 idéntico) — es
 peso muerto redundante con `containment`, por eso no está en las 7 recomendadas.
+Detalle de umbrales/desbalance en `outputs/reports/umbrales_y_desbalance.md`;
+eficacia por generador en `outputs/reports/eficacia_por_generador.md`.
 
 **El hilo común de Summary:** se probaron cuatro familias — solape léxico,
 similitud por frase, recombinación de n-gramas y **estructura sintáctica** — y
