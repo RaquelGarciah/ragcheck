@@ -50,9 +50,8 @@ fijan las métricas y la metodología de evaluación; luego se entrena y compara
 y se elige un ganador; y por último se sitúa el resultado frente al estado del arte. Dos
 aspectos reciben atención especial por su peso en este problema concreto: la
 \emph{ingeniería de características}, donde reside casi toda la señal, y el
-\emph{desbalance de clases}, que condiciona la decisión final. La exploración de las vías
-que no funcionaron se recoge, condensada, al final del capítulo, porque forma parte de la
-caracterización honesta del problema y no del hilo principal.
+\emph{desbalance de clases}, que condiciona la decisión final. Las vías que no funcionaron
+se recogen, condensadas, al final del capítulo.
 
 % ###########################################################################
 % 1. INTRODUCCIÓN BREVE AL PROBLEMA
@@ -151,10 +150,9 @@ directamente comparables.
 
 \subsubsection{Nivel global}
 
-Un ejemplo concreto fija las ideas antes que cualquier estadística. El
-Cuadro~\ref{tab:ejemplo} muestra un par (fuente, respuesta) de cada clase. En el caso
-limpio, cada afirmación de la respuesta se puede rastrear hasta la fuente; en el caso
-alucinado, la respuesta introduce un dato que la fuente no contiene.
+El Cuadro~\ref{tab:ejemplo} muestra un par (fuente, respuesta) de cada clase. En el caso
+limpio, cada afirmación de la respuesta se rastrea hasta la fuente; en el alucinado, la
+respuesta introduce un dato que la fuente no contiene.
 
 \begin{table}[htbp]
 \centering
@@ -179,8 +177,7 @@ contiene.}
 A nivel global, la prevalencia de alucinación es del $44{,}5\,\%$ en entrenamiento y del
 $34{,}9\,\%$ en test: casi una de cada tres respuestas del corpus contiene alguna
 invención. La longitud de las respuestas y su distribución por tarea aparecen en la
-Figura~\ref{fig:eda-global}; conviene retenerla porque la longitud entrará luego como
-característica.
+Figura~\ref{fig:eda-global}; la longitud entra después como característica.
 
 % FIGURA CC: eda_global. Panel (a): histograma de longitud de respuesta (tokens) global.
 % Panel (b): nº de ejemplos por tarea (barras) train vs test. Fuente: scripts/visualization.py
@@ -230,9 +227,8 @@ desplaza train$\to$test de forma desigual (el mayor salto es QA, $0{,}311\to0{,}
 
 \subsubsection{Caracterización: un caso que el LLM-juez falla y el detector clásico acierta}
 
-Para motivar por qué un detector léxico tiene sentido conviene mostrar un caso donde
-\emph{gana} frente al método dominante (el LLM-juez). Considérese el patrón más frecuente
-de Data2txt: la introducción de una cifra sin base. La Figura~\ref{fig:ejemplo-esquema} lo
+Un caso concreto muestra dónde el detector léxico gana al método dominante, el LLM-juez.
+Considérese el patrón más frecuente de Data2txt: la introducción de una cifra sin base. La Figura~\ref{fig:ejemplo-esquema} lo
 esquematiza. La fuente no contiene el número $4{,}7$; la respuesta lo afirma. Un juez
 basado en un modelo de lenguaje evalúa la respuesta por su \emph{plausibilidad} global, y
 una valoración de $4{,}7$ estrellas para una cafetería es perfectamente plausible, de modo
@@ -283,9 +279,8 @@ El Cuadro~\ref{tab:tipos} muestra la composición por tarea. El dato relevante p
 sigue es que Summary es en su gran mayoría de tipo \emph{evidente} (${\approx}86\,\%$) y
 aun así, como se verá, es la tarea más difícil de detectar: el tipo anotado no explica la
 dificultad. El descriptivo de los tramos (Figura~\ref{fig:spans}) completa el retrato:
-dominan los números, las fechas y los nombres propios, lo que justifica de forma natural
-las características de solape numérico y de entidades, sin entrar todavía en su detalle (eso
-es la sección~\ref{sec:fe}).
+dominan los números, las fechas y los nombres propios, lo que justifica las características
+de solape numérico y de entidades (sección~\ref{sec:fe}).
 
 \begin{table}[htbp]
 \centering
@@ -361,8 +356,7 @@ leen del cuadro.
 \end{equation}
 Fracción de palabras distintas de la respuesta que también están en la fuente. Alto
 significa que todo lo que afirma la respuesta tiene respaldo léxico; bajo, que introduce
-palabras nuevas. Es, casi literalmente, la definición de \emph{groundedness} convertida en
-número.
+palabras nuevas. Es la definición de \emph{groundedness} convertida en número.
 
 \paragraph{Jaccard.}
 \begin{equation}
@@ -423,15 +417,15 @@ frase y one-hot de tarea.}
 \subsection{¿Separan las clases? Separabilidad y correlación}
 \label{sec:corr}
 
-Antes de seleccionar conviene ver dos cosas: si las características discriminan, y cuánta
+Antes de seleccionar se comprueban dos cosas: si las características discriminan y cuánta
 información \emph{independiente} aportan. La Figura~\ref{fig:sep} muestra la distribución de
 cada característica continua separada por la variable objetivo: la señal es visible, en
 \tc{containment}, \tc{jaccard} o \tc{num\_context} la clase alucinada se desplaza hacia
 menos solape.
 
-Ahora bien, discriminar no basta: dos características muy correlacionadas dicen lo mismo. La
-Figura~\ref{fig:corr} muestra la correlación de Spearman entre las dieciocho. El patrón es
-contundente: \tc{containment} correlaciona por encima de $0{,}8$ (en valor absoluto) con
+Discriminar no basta: dos características muy correlacionadas dicen lo mismo. La
+Figura~\ref{fig:corr} muestra la correlación de Spearman entre las dieciocho:
+\tc{containment} correlaciona por encima de $0{,}8$ (en valor absoluto) con
 \tc{tfidf\_cos}, \tc{sent\_cont\_mean}, \tc{sent\_sim\_mean}, \tc{novel\_bigram} y
 \tc{novel\_trigram}, y estas dos últimas son casi el negativo exacto de \tc{containment}.
 En otras palabras, \textbf{las dieciocho características no codifican dieciocho señales
@@ -448,10 +442,9 @@ independientes, sino unos pocos \emph{ejes ortogonales}}:
   \item \textbf{Polaridad}: \tc{neg\_diff}, señal débil pero independiente.
 \end{enumerate}
 
-Esta observación es la que motiva y anticipa la selección: si hay tres o cuatro ejes,
-sobran variables, y conservarlas todas solo añade ruido colineal que perjudica sobre todo a
-las tareas de poca señal. La regla que se aplicará es podar por \emph{redundancia} (el
-heatmap), no por correlación con la etiqueta.
+Con tres o cuatro ejes reales, sobran variables: conservarlas todas añade ruido colineal
+que perjudica sobre todo a las tareas de poca señal. La poda se hará por \emph{redundancia}
+(el heatmap), no por correlación con la etiqueta.
 
 \begin{figure}[htbp]
 \centering
@@ -707,7 +700,8 @@ combinación es la media sobre los seis pliegues, y se elige la de mayor media;
 \item con la mejor combinación se reentrena el modelo y se evalúa una sola vez sobre el test
 oficial, fijando el umbral de decisión por el índice de Youden (el umbral que maximiza la
 suma de sensibilidad y especificidad);
-\item se reportan precisión, exhaustividad (recall), F1 y AUC, y se muestra la curva ROC.
+\item se reportan precisión, exhaustividad (recall), F1, accuracy y AUC, y se muestra la
+curva ROC.
 \end{itemize}
 
 Las curvas ROC y precisión-recall de los cinco modelos superpuestas aparecen en la
@@ -1212,8 +1206,8 @@ recall exige bajar la precisión, y cuánto se paga depende de la tarea. La
 Figura~\ref{fig:pr-op} muestra la curva PR por tarea con el punto de operación marcado. Su
 lectura cuantitativa es directa: para exigir un recall del $80\,\%$, en Data2txt la precisión
 apenas baja a \textbf{79,6\,\%}, mientras
-que en Summary se desploma a \textbf{31,3\,\%}. Ese es, medido y no supuesto, el precio de cazar las alucinaciones de Summary
-con características léxicas.
+que en Summary se desploma a \textbf{31,3\,\%}. Ese es el precio de cazar las alucinaciones
+de Summary con características léxicas.
 
 \begin{figure}[htbp]
 \centering
@@ -1347,30 +1341,27 @@ $84{,}3\,\%$; nuestra accuracy es $77{,}6\,\%$. La lectura honesta cruza las tre
 del Cuadro~\ref{tab:sota-def}. En \textbf{calidad}, superamos en F1 global al juez
 GPT-4-turbo ($63{,}4$) y a Luna ($65{,}4$), y quedamos unos diez puntos por debajo de los
 modelos neuronales ajustados ($79$--$84$). En \textbf{complejidad y precio}, la distancia es
-inversa y enorme: frente a miles de millones de parámetros, GPU y un coste por evaluación no
+inversa y de varios órdenes de magnitud: frente a miles de millones de parámetros, GPU y un coste por evaluación no
 nulo, nuestro detector usa un centenar de parámetros, corre en CPU, es determinista,
-interpretable y gratis. Y el patrón por tarea es el mismo para todos: Data2txt fácil
+interpretable y gratis. El patrón por tarea es el mismo para todos: Data2txt fácil
 ($88$--$92\,\%$), QA y Summary mucho más bajos. Chocamos contra el mismo muro que modelos
-mil veces mayores, solo un poco antes. La aportación no es ganar en calidad absoluta, sino
-mostrar cuánta se alcanza a coste esencialmente nulo, y \emph{acotar con precisión el techo}
-de lo léxico.
+mil veces mayores, solo un poco antes. La aportación es doble: mostrar cuánta calidad se
+alcanza a coste esencialmente nulo, y \emph{acotar el techo} de lo léxico.
 
 % ###########################################################################
 % EXPLORACIÓN (condensada, fuera del hilo principal)
 % ###########################################################################
 \section{Exploración: vías descartadas}
 
-El resultado anterior es el destilado de una exploración amplia. Se recogen aquí, de forma
-condensada, las vías que no funcionaron, porque forman parte de la caracterización del
-problema y no del hilo principal.
+Estas vías se probaron y no funcionaron. Se recogen porque acotan el techo del problema.
 
 \paragraph{Características que no aportaron.} Se probaron y descartaron, todas medidas con el
 protocolo honesto: LSA (TF-IDF con descomposición en valores singulares truncada
 \cite{deerwester1990lsa}), que aportó $+0{,}001$ de AUC; la novedad de $n$-gramas por frase,
 $+0{,}001$; y características estructurales de spaCy (arcos de dependencia, sujeto-verbo-objeto,
-enlace entidad-número), que dejaron Summary en $0{,}701\to0{,}700$. Este último resultado es
-informativo: ni siquiera features estructurales clásicas cierran Summary, lo que confirma que
-el residuo es semántico y de conocimiento del mundo, fuera del alcance de la superficie.
+enlace entidad-número), que dejaron Summary en $0{,}701\to0{,}700$: ni siquiera las features
+estructurales clásicas cierran Summary, señal de que el residuo es semántico y de
+conocimiento del mundo, fuera del alcance de la superficie.
 
 \paragraph{Tratamiento del desbalance que no movió la frontera.} Reequilibrar las clases no
 crea señal: el sobremuestreo, el submuestreo, SMOTE \cite{chawla2002smote} y el aprendizaje
@@ -1385,7 +1376,7 @@ por tarea de la sección~\ref{sec:desb-trat}.
 \begin{subfigure}{0.52\textwidth}\includegraphics[width=\textwidth]{desb_frontera_remuestreo}\caption{Frontera por estrategia.}\label{fig:frontera}\end{subfigure}\hfill
 \begin{subfigure}{0.44\textwidth}\includegraphics[width=\textwidth]{desb_saerens_colapso}\caption{Saerens: prior estimado vs.\ real.}\label{fig:saerens}\end{subfigure}
 \caption{Reequilibrar clases no mueve la frontera; la corrección de prior de Saerens colapsa.
-Resultados negativos, documentados por honestidad.}
+Resultados negativos.}
 \end{figure}
 
 \begin{figure}[htbp]
@@ -1406,10 +1397,9 @@ AUC-ROC de $0{,}80$ sobre el test oficial con evaluación honesta (la regresión
 queda en $0{,}798$), y el mejor, XGBoost, alcanza $0{,}837$ con solo once características
 léxicas seleccionadas por RFE.
 
-\paragraph{Falsos negativos y desbalance.} El déficit de detección no era de características
-ni de balance de clases, sino del punto de decisión bajo un desbalance heterogéneo. Un umbral
-por tarea recupera casi la mitad de los falsos negativos (de $285$ a $125$) y hace competitivo
-el F1 de Summary. La corrección de prior, el remuestreo y el aprendizaje sensible al coste se
+\paragraph{Falsos negativos y desbalance.} El déficit de detección era un problema de
+decisión bajo un desbalance heterogéneo. Un umbral por tarea recupera casi la mitad de los
+falsos negativos (de $285$ a $125$) y hace competitivo el F1 de Summary. La corrección de prior, el remuestreo y el aprendizaje sensible al coste se
 descartaron con evidencia.
 
 \paragraph{Posicionamiento.} El detector rinde por encima del juez GPT-4-turbo y de Luna, y a
