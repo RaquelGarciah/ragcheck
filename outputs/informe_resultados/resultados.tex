@@ -699,35 +699,143 @@ hiperparámetros óptimos (por grid search con GroupKFold) y sus métricas en el
 con el umbral de Youden. Las curvas ROC y PR conjuntas aparecen en la
 Figura~\ref{fig:roc-all}.
 
+\newcommand{\rocw}{0.4\textwidth}
+
 \paragraph{Regresión logística.} Modela la probabilidad de alucinación con una función
 sigmoide de una combinación lineal de las características \cite{cox1958logreg}. Ventaja:
 máxima interpretabilidad (cada coeficiente es el peso de una característica) y coste ínfimo.
-Desventaja: solo captura fronteras lineales. El grid search elige regularización
-\tc{C}${}=0{,}3$ y \tc{class\_weight}${}=$balanced; alcanza AUC $0{,}806$ y F1 $0{,}658$, con
-el recall más alto ($0{,}749$) por el reponderado de clases, a costa de precisión.
+Desventaja: solo captura fronteras lineales. La búsqueda en rejilla (Cuadro~\ref{tab:grid-lr})
+elige regularización \tc{C}${}=0{,}3$ y \tc{class\_weight}${}=$balanced; alcanza AUC $0{,}806$
+y F1 $0{,}658$, con el recall más alto ($0{,}749$) por el reponderado de clases, a costa de
+precisión. Su curva ROC está en la Figura~\ref{fig:roc-lr}.
+
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{ccc}
+\toprule
+\tc{C} & \tc{class\_weight} & F1 (CV) \\
+\midrule
+0,3 & balanced & \textbf{0,673} \\
+0,1 / 1 / 3 / 10 & balanced & 0,672 \\
+0,1 & --- & 0,663 \\
+0,3 & --- & 0,661 \\
+1 / 3 / 10 & --- & 0,657--0,658 \\
+\bottomrule
+\end{tabular}
+\caption{Búsqueda en rejilla de la regresión logística (F1 en validación cruzada,
+GroupKFold). El reponderado de clases (\emph{balanced}) es lo que decide.}
+\label{tab:grid-lr}
+\end{table}
+
+\begin{figure}[htbp]\centering\includegraphics[width=\rocw]{roc_logreg}
+\caption{Curva ROC de la regresión logística (test, AUC $0{,}806$).}\label{fig:roc-lr}\end{figure}
 
 \paragraph{K vecinos más cercanos (KNN).} Clasifica según las clases de los $k$ vecinos más
 próximos sobre las características estandarizadas \cite{cover1967knn}. Ventaja: no asume forma
 de la frontera. Desventaja: sensible a la escala y al ruido, y su inferencia guarda todo el
-entrenamiento. El grid search elige $k=25$ vecinos ponderados por distancia; da AUC $0{,}826$
-y F1 $0{,}681$.
+entrenamiento. La rejilla (Cuadro~\ref{tab:grid-knn}) elige $k=25$ vecinos ponderados por
+distancia; da AUC $0{,}826$ y F1 $0{,}681$ (Figura~\ref{fig:roc-knn}).
+
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{ccc}
+\toprule
+$k$ & pesos & F1 (CV) \\
+\midrule
+25 & distance & \textbf{0,685} \\
+35 & distance / uniform & 0,684 \\
+25 / 15 & uniform & 0,684 \\
+15 & distance & 0,683 \\
+11 & uniform / distance & 0,681 \\
+5 & uniform / distance & 0,672 \\
+\bottomrule
+\end{tabular}
+\caption{Búsqueda en rejilla de KNN. La curva se satura a partir de $k\approx15$; se toma
+$k=25$ por dar el máximo.}
+\label{tab:grid-knn}
+\end{table}
+
+\begin{figure}[htbp]\centering\includegraphics[width=\rocw]{roc_knn}
+\caption{Curva ROC de KNN (test, AUC $0{,}826$).}\label{fig:roc-knn}\end{figure}
 
 \paragraph{Máquina de vectores de soporte (SVM).} Busca una frontera de máximo margen en un
 espacio transformado por un núcleo RBF \cite{cortes1995svm}. Ventaja: fronteras no lineales
 con buen control del sobreajuste. Desventaja: no da probabilidades de forma nativa y escala
-mal con el número de ejemplos. El grid search elige \tc{C}${}=10$; obtiene AUC $0{,}813$ y el
-mejor F1 ($0{,}690$) y accuracy ($0{,}784$) de los cinco.
+mal con el número de ejemplos. La rejilla (Cuadro~\ref{tab:grid-svm}) elige \tc{C}${}=10$;
+obtiene AUC $0{,}813$ y el mejor F1 ($0{,}690$) y accuracy ($0{,}784$) de los cinco
+(Figura~\ref{fig:roc-svm}).
+
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{ccc}
+\toprule
+\tc{C} & \tc{gamma} & F1 (CV) \\
+\midrule
+10 & scale / auto & \textbf{0,688} \\
+100 & scale / auto & 0,682 \\
+1 & scale / auto & 0,680 \\
+\bottomrule
+\end{tabular}
+\caption{Búsqueda en rejilla de la SVM (sobre submuestra por coste). \tc{gamma} apenas
+influye; $C=10$ es el mejor compromiso.}
+\label{tab:grid-svm}
+\end{table}
+
+\begin{figure}[htbp]\centering\includegraphics[width=\rocw]{roc_svm}
+\caption{Curva ROC de la SVM (test, AUC $0{,}813$).}\label{fig:roc-svm}\end{figure}
 
 \paragraph{Bosque aleatorio.} Promedia muchos árboles de decisión entrenados sobre
 submuestras \cite{breiman2001rf}. Ventaja: robusto, capta interacciones, poco sensible a la
-escala. Desventaja: menos interpretable que un solo árbol. El grid search elige profundidad
-máxima $20$; alcanza AUC $0{,}830$ y F1 $0{,}676$.
+escala. Desventaja: menos interpretable que un solo árbol. La rejilla
+(Cuadro~\ref{tab:grid-rf}) elige profundidad máxima $20$; alcanza AUC $0{,}830$ y F1 $0{,}676$
+(Figura~\ref{fig:roc-rf}).
+
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{cc}
+\toprule
+prof.\ máxima & F1 (CV) \\
+\midrule
+20 & \textbf{0,693} \\
+sin límite & 0,691 \\
+12 & 0,689 \\
+8 & 0,684 \\
+\bottomrule
+\end{tabular}
+\caption{Búsqueda en rejilla del bosque aleatorio. Árboles profundos ($20$) rinden algo
+mejor que sin límite.}
+\label{tab:grid-rf}
+\end{table}
+
+\begin{figure}[htbp]\centering\includegraphics[width=\rocw]{roc_random_forest}
+\caption{Curva ROC del bosque aleatorio (test, AUC $0{,}830$).}\label{fig:roc-rf}\end{figure}
 
 \paragraph{Gradient boosting (XGBoost).} Construye árboles secuencialmente, cada uno
 corrigiendo el error del conjunto anterior \cite{friedman2001gbm,chen2016xgboost}. Ventaja:
 suele ser el mejor en datos tabulares y da probabilidades bien calibradas. Desventaja: más
-hiperparámetros que ajustar. El grid search elige profundidad $6$ y tasa de aprendizaje
-$0{,}05$; es el mejor en AUC ($0{,}837$).
+hiperparámetros que ajustar. La rejilla (Cuadro~\ref{tab:grid-xgb}) elige profundidad $6$ y
+tasa de aprendizaje $0{,}05$; es el mejor en AUC ($0{,}837$) (Figura~\ref{fig:roc-xgb}).
+
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{ccc}
+\toprule
+tasa aprend. & prof.\ máx & F1 (CV) \\
+\midrule
+0,05 & 6 & \textbf{0,692} \\
+0,1 & 4 / 6 & 0,692 \\
+0,05 & 4 & 0,691 \\
+0,1 & 3 & 0,690 \\
+0,05 & 3 & 0,689 \\
+\bottomrule
+\end{tabular}
+\caption{Búsqueda en rejilla de XGBoost. Todas las combinaciones rinden parecido; se toma
+prof.\ $6$ y tasa $0{,}05$.}
+\label{tab:grid-xgb}
+\end{table}
+
+\begin{figure}[htbp]\centering\includegraphics[width=\rocw]{roc_xgboost}
+\caption{Curva ROC de XGBoost (test, AUC $0{,}837$).}\label{fig:roc-xgb}\end{figure}
 
 \subsection{Modelo ganador}
 \label{sec:winner}
