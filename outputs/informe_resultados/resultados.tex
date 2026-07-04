@@ -693,21 +693,54 @@ GroupKFold) protege el motor.
 
 \subsection{Resultados por modelo}
 
-Se presenta el rendimiento de cada clasificador clásico sobre el conjunto de once variables.
-Para cada uno se indican su intuición, sus ventajas y desventajas en este problema, sus
-hiperparámetros óptimos (por grid search con GroupKFold) y sus métricas en el test oficial
-con el umbral de Youden. Las curvas ROC y PR conjuntas aparecen en la
+El propósito de esta sección es presentar los resultados que consigue cada clasificador
+clásico sobre el conjunto de once variables. Para todos se sigue el mismo procedimiento:
+
+\begin{itemize}
+\item se describe el algoritmo y se enumeran sus hiperparámetros, indicando los valores que
+tomará cada uno en la búsqueda;
+\item esos hiperparámetros se optimizan por búsqueda en rejilla (\emph{grid search}) con
+validación cruzada GroupKFold por \tc{source}, tomando como criterio de selección el valor
+F1;
+\item con la mejor combinación se reentrena el modelo y se evalúa una sola vez sobre el test
+oficial, fijando el umbral de decisión por el índice de Youden (el umbral que maximiza la
+suma de sensibilidad y especificidad);
+\item se reportan precisión, exhaustividad (recall), F1 y AUC, y se muestra la curva ROC.
+\end{itemize}
+
+Las curvas ROC y precisión-recall de los cinco modelos superpuestas aparecen en la
 Figura~\ref{fig:roc-all}.
 
-\newcommand{\rocw}{0.4\textwidth}
+\newcommand{\rocw}{0.42\textwidth}
 
-\paragraph{Regresión logística.} Modela la probabilidad de alucinación con una función
-sigmoide de una combinación lineal de las características \cite{cox1958logreg}. Ventaja:
-máxima interpretabilidad (cada coeficiente es el peso de una característica) y coste ínfimo.
-Desventaja: solo captura fronteras lineales. La búsqueda en rejilla (Cuadro~\ref{tab:grid-lr})
-elige regularización \tc{C}${}=0{,}3$ y \tc{class\_weight}${}=$balanced; alcanza AUC $0{,}806$
-y F1 $0{,}658$, con el recall más alto ($0{,}749$) por el reponderado de clases, a costa de
-precisión. Su curva ROC está en la Figura~\ref{fig:roc-lr}.
+\subsubsection{Regresión logística}
+
+La regresión logística modela la probabilidad de alucinación aplicando la función sigmoide
+$\sigma(z)=1/(1+e^{-z})$ a una combinación lineal de las once características
+\cite{cox1958logreg}. Es el modelo más interpretable de todos, ya que cada coeficiente es el
+peso, con su signo, de una característica, y también el más barato de entrenar; su límite es
+que solo puede trazar fronteras de decisión lineales. Se ajustan dos hiperparámetros:
+
+\begin{itemize}
+\item \tc{C}: es el inverso de la fuerza de regularización. Cuanto menor es \tc{C}, más se
+penalizan los coeficientes grandes y más simple resulta el modelo, lo que reduce el
+sobreajuste. Se prueban los valores $0{,}1$, $0{,}3$, $1$, $3$ y $10$.
+\item \tc{class\_weight}: determina cómo pesa cada clase en el ajuste.
+  \begin{itemize}
+  \item \tc{None}: todas las respuestas pesan igual.
+  \item \tc{balanced}: cada clase se pondera de forma inversamente proporcional a su
+  frecuencia, de modo que la clase minoritaria (la alucinación) pesa más. Es una manera de
+  compensar el desbalance directamente en el entrenamiento.
+  \end{itemize}
+\end{itemize}
+
+Optimizando el valor F1 en validación cruzada, la mejor combinación es \tc{C}${}=0{,}3$ con
+\tc{class\_weight}${}=$\tc{balanced} (Cuadro~\ref{tab:grid-lr}); como se aprecia en la tabla,
+lo que marca la diferencia no es el valor de \tc{C} sino activar el reponderado de clases.
+Con esa configuración, sobre el test oficial y con umbral de Youden, se obtienen los
+resultados del Cuadro~\ref{tab:met-lr}. Es el modelo con mayor recall ($0{,}749$), porque el
+reponderado lo empuja a predecir alucinación con más frecuencia, aunque a costa de la
+precisión más baja de los cinco ($0{,}587$). Su curva ROC está en la Figura~\ref{fig:roc-lr}.
 
 \begin{table}[htbp]
 \centering\small
@@ -716,54 +749,138 @@ precisión. Su curva ROC está en la Figura~\ref{fig:roc-lr}.
 \tc{C} & \tc{class\_weight} & F1 (CV) \\
 \midrule
 0,3 & balanced & \textbf{0,673} \\
-0,1 / 1 / 3 / 10 & balanced & 0,672 \\
-0,1 & --- & 0,663 \\
-0,3 & --- & 0,661 \\
-1 / 3 / 10 & --- & 0,657--0,658 \\
+0,1 & balanced & 0,672 \\
+1 & balanced & 0,672 \\
+3 & balanced & 0,672 \\
+10 & balanced & 0,672 \\
+0,1 & None & 0,663 \\
+0,3 & None & 0,661 \\
+1 & None & 0,658 \\
+3 & None & 0,657 \\
+10 & None & 0,657 \\
 \bottomrule
 \end{tabular}
-\caption{Búsqueda en rejilla de la regresión logística (F1 en validación cruzada,
-GroupKFold). El reponderado de clases (\emph{balanced}) es lo que decide.}
+\caption{Valores F1 (validación cruzada, GroupKFold) para las combinaciones de la regresión
+logística. El reponderado de clases (\emph{balanced}) domina sobre el valor de \tc{C}.}
 \label{tab:grid-lr}
+\end{table}
+
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{lc}
+\toprule
+Regresión logística & \\
+\midrule
+Precisión & 0,587 \\
+Exhaustividad (recall) & 0,749 \\
+Valor F1 & 0,658 \\
+AUC & 0,806 \\
+\bottomrule
+\end{tabular}
+\caption{Precisión, exhaustividad, F1 y AUC de la regresión logística en el test oficial
+(umbral de Youden).}
+\label{tab:met-lr}
 \end{table}
 
 \begin{figure}[htbp]\centering\includegraphics[width=\rocw]{roc_logreg}
 \caption{Curva ROC de la regresión logística (test, AUC $0{,}806$).}\label{fig:roc-lr}\end{figure}
 
-\paragraph{K vecinos más cercanos (KNN).} Clasifica según las clases de los $k$ vecinos más
-próximos sobre las características estandarizadas \cite{cover1967knn}. Ventaja: no asume forma
-de la frontera. Desventaja: sensible a la escala y al ruido, y su inferencia guarda todo el
-entrenamiento. La rejilla (Cuadro~\ref{tab:grid-knn}) elige $k=25$ vecinos ponderados por
-distancia; da AUC $0{,}826$ y F1 $0{,}681$ (Figura~\ref{fig:roc-knn}).
+\subsubsection{K vecinos más cercanos (KNN)}
+
+El algoritmo de los $k$ vecinos más cercanos clasifica cada respuesta según la clase
+mayoritaria entre las $k$ del entrenamiento más parecidas a ella \cite{cover1967knn}. No
+asume ninguna forma para la frontera de decisión, pero es sensible a la escala de las
+características (por eso se estandarizan antes) y su inferencia es costosa, ya que guarda todo
+el conjunto de entrenamiento. Se ajustan dos hiperparámetros (la distancia se fija en la
+euclídea):
+
+\begin{itemize}
+\item \tc{n\_neighbors} ($k$): número de vecinos que se consultan para decidir la clase. Un
+$k$ pequeño da fronteras muy locales y ruidosas; uno grande, fronteras más suaves. Se prueban
+los valores $5$, $11$, $15$, $25$ y $35$.
+\item \tc{weights}: cómo se combinan los votos de los $k$ vecinos.
+  \begin{itemize}
+  \item \tc{uniform}: todos los vecinos pesan igual.
+  \item \tc{distance}: cada vecino pesa de forma inversa a su distancia, de modo que los más
+  cercanos influyen más en la predicción.
+  \end{itemize}
+\end{itemize}
+
+Optimizando F1 (Cuadro~\ref{tab:grid-knn}), la mejor combinación es $k=25$ vecinos ponderados
+por distancia. La curva se aplana a partir de $k\approx15$: a partir de ahí añadir vecinos
+apenas cambia el F1. Sobre el test oficial (umbral de Youden) rinde según el
+Cuadro~\ref{tab:met-knn}, con un comportamiento equilibrado entre precisión y recall
+(Figura~\ref{fig:roc-knn}).
 
 \begin{table}[htbp]
 \centering\small
 \begin{tabular}{ccc}
 \toprule
-$k$ & pesos & F1 (CV) \\
+$k$ & \tc{weights} & F1 (CV) \\
 \midrule
 25 & distance & \textbf{0,685} \\
-35 & distance / uniform & 0,684 \\
-25 / 15 & uniform & 0,684 \\
+35 & distance & 0,684 \\
+35 & uniform & 0,684 \\
+25 & uniform & 0,684 \\
+15 & uniform & 0,684 \\
 15 & distance & 0,683 \\
-11 & uniform / distance & 0,681 \\
-5 & uniform / distance & 0,672 \\
+11 & distance & 0,681 \\
+11 & uniform & 0,681 \\
+5 & uniform & 0,672 \\
+5 & distance & 0,672 \\
 \bottomrule
 \end{tabular}
-\caption{Búsqueda en rejilla de KNN. La curva se satura a partir de $k\approx15$; se toma
-$k=25$ por dar el máximo.}
+\caption{Valores F1 (validación cruzada) para las combinaciones de KNN. El rendimiento se
+satura a partir de $k\approx15$.}
 \label{tab:grid-knn}
+\end{table}
+
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{lc}
+\toprule
+KNN & \\
+\midrule
+Precisión & 0,665 \\
+Exhaustividad (recall) & 0,698 \\
+Valor F1 & 0,681 \\
+AUC & 0,826 \\
+\bottomrule
+\end{tabular}
+\caption{Precisión, exhaustividad, F1 y AUC de KNN en el test oficial (umbral de Youden).}
+\label{tab:met-knn}
 \end{table}
 
 \begin{figure}[htbp]\centering\includegraphics[width=\rocw]{roc_knn}
 \caption{Curva ROC de KNN (test, AUC $0{,}826$).}\label{fig:roc-knn}\end{figure}
 
-\paragraph{Máquina de vectores de soporte (SVM).} Busca una frontera de máximo margen en un
-espacio transformado por un núcleo RBF \cite{cortes1995svm}. Ventaja: fronteras no lineales
-con buen control del sobreajuste. Desventaja: no da probabilidades de forma nativa y escala
-mal con el número de ejemplos. La rejilla (Cuadro~\ref{tab:grid-svm}) elige \tc{C}${}=10$;
-obtiene AUC $0{,}813$ y el mejor F1 ($0{,}690$) y accuracy ($0{,}784$) de los cinco
-(Figura~\ref{fig:roc-svm}).
+\subsubsection{Máquina de vectores de soporte (SVM)}
+
+La máquina de vectores de soporte busca la frontera que separa las dos clases con el mayor
+margen posible; con un núcleo de base radial (RBF) esa frontera puede ser no lineal, porque el
+núcleo proyecta las características a un espacio de mayor dimensión \cite{cortes1995svm}. Da
+buenas fronteras curvas con control del sobreajuste, pero no produce probabilidades de forma
+nativa (se calibran aparte) y su coste crece con el cuadrado del número de ejemplos, por lo
+que la búsqueda de hiperparámetros se hace sobre una submuestra. Las características se
+estandarizan antes. Se ajustan dos hiperparámetros:
+
+\begin{itemize}
+\item \tc{C}: regula el compromiso entre un margen ancho y clasificar bien el entrenamiento.
+Un \tc{C} pequeño tolera más errores (margen ancho, modelo más simple); uno grande penaliza
+cada error (margen estrecho). Se prueban los valores $1$, $10$ y $100$.
+\item \tc{gamma}: anchura del núcleo RBF, es decir, hasta qué distancia influye cada ejemplo.
+  \begin{itemize}
+  \item \tc{scale}: usa $1/(n_\text{car}\cdot \operatorname{Var}(X))$, que tiene en cuenta la
+  dispersión de los datos.
+  \item \tc{auto}: usa $1/n_\text{car}$.
+  \end{itemize}
+\end{itemize}
+
+Optimizando F1 (Cuadro~\ref{tab:grid-svm}), la mejor combinación es \tc{C}${}=10$; el valor de
+\tc{gamma} apenas influye. Sobre el test oficial (umbral de Youden) obtiene el mejor F1
+($0{,}690$) y la mejor accuracy ($0{,}784$) de los cinco modelos
+(Cuadro~\ref{tab:met-svm}, Figura~\ref{fig:roc-svm}), aunque su AUC ($0{,}813$) queda por
+debajo de los modelos de árboles.
 
 \begin{table}[htbp]
 \centering\small
@@ -771,67 +888,148 @@ obtiene AUC $0{,}813$ y el mejor F1 ($0{,}690$) y accuracy ($0{,}784$) de los ci
 \toprule
 \tc{C} & \tc{gamma} & F1 (CV) \\
 \midrule
-10 & scale / auto & \textbf{0,688} \\
-100 & scale / auto & 0,682 \\
-1 & scale / auto & 0,680 \\
+10 & scale & \textbf{0,688} \\
+10 & auto & 0,688 \\
+100 & scale & 0,682 \\
+100 & auto & 0,682 \\
+1 & scale & 0,680 \\
+1 & auto & 0,680 \\
 \bottomrule
 \end{tabular}
-\caption{Búsqueda en rejilla de la SVM (sobre submuestra por coste). \tc{gamma} apenas
-influye; $C=10$ es el mejor compromiso.}
+\caption{Valores F1 (validación cruzada, sobre submuestra) para las combinaciones de la SVM.
+\tc{gamma} no influye; $C=10$ es el mejor compromiso.}
 \label{tab:grid-svm}
+\end{table}
+
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{lc}
+\toprule
+SVM & \\
+\midrule
+Precisión & 0,693 \\
+Exhaustividad (recall) & 0,686 \\
+Valor F1 & 0,690 \\
+AUC & 0,813 \\
+\bottomrule
+\end{tabular}
+\caption{Precisión, exhaustividad, F1 y AUC de la SVM en el test oficial (umbral de Youden).}
+\label{tab:met-svm}
 \end{table}
 
 \begin{figure}[htbp]\centering\includegraphics[width=\rocw]{roc_svm}
 \caption{Curva ROC de la SVM (test, AUC $0{,}813$).}\label{fig:roc-svm}\end{figure}
 
-\paragraph{Bosque aleatorio.} Promedia muchos árboles de decisión entrenados sobre
-submuestras \cite{breiman2001rf}. Ventaja: robusto, capta interacciones, poco sensible a la
-escala. Desventaja: menos interpretable que un solo árbol. La rejilla
-(Cuadro~\ref{tab:grid-rf}) elige profundidad máxima $20$; alcanza AUC $0{,}830$ y F1 $0{,}676$
-(Figura~\ref{fig:roc-rf}).
+\subsubsection{Bosque aleatorio}
+
+El bosque aleatorio promedia el voto de muchos árboles de decisión, cada uno entrenado sobre
+una submuestra distinta de los datos y de las características \cite{breiman2001rf}. Es robusto,
+capta interacciones entre características y es insensible a la escala, a cambio de perder la
+interpretabilidad de un árbol único. Se fija el número de árboles en $300$ (suficiente para
+que el promedio se estabilice) y se ajusta la profundidad máxima:
+
+\begin{itemize}
+\item \tc{max\_depth}: profundidad máxima de cada árbol, es decir, cuántas preguntas
+encadenadas puede hacer. Árboles poco profundos capturan patrones gruesos; muy profundos,
+detalles finos a riesgo de sobreajustar. Se prueban los valores $8$, $12$, $20$ y
+\tc{None} (sin límite, el árbol crece hasta separar el entrenamiento).
+\end{itemize}
+
+Optimizando F1 (Cuadro~\ref{tab:grid-rf}), la mejor opción es profundidad máxima $20$, algo
+mejor que dejar los árboles sin límite. Sobre el test oficial (umbral de Youden) alcanza un
+AUC de $0{,}830$, el segundo mejor (Cuadro~\ref{tab:met-rf}, Figura~\ref{fig:roc-rf}).
 
 \begin{table}[htbp]
 \centering\small
 \begin{tabular}{cc}
 \toprule
-prof.\ máxima & F1 (CV) \\
+\tc{max\_depth} & F1 (CV) \\
 \midrule
 20 & \textbf{0,693} \\
-sin límite & 0,691 \\
+\tc{None} (sin límite) & 0,691 \\
 12 & 0,689 \\
 8 & 0,684 \\
 \bottomrule
 \end{tabular}
-\caption{Búsqueda en rejilla del bosque aleatorio. Árboles profundos ($20$) rinden algo
-mejor que sin límite.}
+\caption{Valores F1 (validación cruzada) para las profundidades del bosque aleatorio.}
 \label{tab:grid-rf}
+\end{table}
+
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{lc}
+\toprule
+Bosque aleatorio & \\
+\midrule
+Precisión & 0,679 \\
+Exhaustividad (recall) & 0,672 \\
+Valor F1 & 0,676 \\
+AUC & 0,830 \\
+\bottomrule
+\end{tabular}
+\caption{Precisión, exhaustividad, F1 y AUC del bosque aleatorio en el test oficial (umbral de
+Youden).}
+\label{tab:met-rf}
 \end{table}
 
 \begin{figure}[htbp]\centering\includegraphics[width=\rocw]{roc_random_forest}
 \caption{Curva ROC del bosque aleatorio (test, AUC $0{,}830$).}\label{fig:roc-rf}\end{figure}
 
-\paragraph{Gradient boosting (XGBoost).} Construye árboles secuencialmente, cada uno
-corrigiendo el error del conjunto anterior \cite{friedman2001gbm,chen2016xgboost}. Ventaja:
-suele ser el mejor en datos tabulares y da probabilidades bien calibradas. Desventaja: más
-hiperparámetros que ajustar. La rejilla (Cuadro~\ref{tab:grid-xgb}) elige profundidad $6$ y
-tasa de aprendizaje $0{,}05$; es el mejor en AUC ($0{,}837$) (Figura~\ref{fig:roc-xgb}).
+\subsubsection{Gradient boosting (XGBoost)}
+
+El \emph{gradient boosting} construye los árboles de forma secuencial: cada árbol nuevo se
+entrena para corregir los errores que comete la suma de los anteriores
+\cite{friedman2001gbm,chen2016xgboost}. Suele ser el mejor clasificador en datos tabulares y
+produce probabilidades bien calibradas, a cambio de tener más hiperparámetros que ajustar. Se
+fijan el número de árboles ($300$), el submuestreo ($0{,}8$) y la regularización, y se ajustan
+los dos hiperparámetros más influyentes:
+
+\begin{itemize}
+\item \tc{max\_depth}: profundidad de cada árbol; controla la complejidad de las interacciones
+que puede capturar. Se prueban los valores $3$, $4$ y $6$.
+\item \tc{learning\_rate}: tasa de aprendizaje, es decir, cuánto contribuye cada árbol nuevo a
+la predicción. Una tasa baja aprende más despacio pero generaliza mejor. Se prueban los
+valores $0{,}05$ y $0{,}1$.
+\end{itemize}
+
+Optimizando F1 (Cuadro~\ref{tab:grid-xgb}), la mejor combinación es profundidad $6$ y tasa de
+aprendizaje $0{,}05$, aunque todas las combinaciones rinden muy parecido. Sobre el test
+oficial (umbral de Youden) obtiene el mejor AUC de los cinco modelos, $0{,}837$
+(Cuadro~\ref{tab:met-xgb}, Figura~\ref{fig:roc-xgb}).
 
 \begin{table}[htbp]
 \centering\small
 \begin{tabular}{ccc}
 \toprule
-tasa aprend. & prof.\ máx & F1 (CV) \\
+\tc{max\_depth} & \tc{learning\_rate} & F1 (CV) \\
 \midrule
-0,05 & 6 & \textbf{0,692} \\
-0,1 & 4 / 6 & 0,692 \\
-0,05 & 4 & 0,691 \\
-0,1 & 3 & 0,690 \\
-0,05 & 3 & 0,689 \\
+6 & 0,05 & \textbf{0,692} \\
+4 & 0,1 & 0,692 \\
+6 & 0,1 & 0,692 \\
+4 & 0,05 & 0,691 \\
+3 & 0,1 & 0,690 \\
+3 & 0,05 & 0,689 \\
 \bottomrule
 \end{tabular}
-\caption{Búsqueda en rejilla de XGBoost. Todas las combinaciones rinden parecido; se toma
-prof.\ $6$ y tasa $0{,}05$.}
+\caption{Valores F1 (validación cruzada) para las combinaciones de XGBoost. Todas rinden
+parecido; se toma profundidad $6$ y tasa $0{,}05$.}
 \label{tab:grid-xgb}
+\end{table}
+
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{lc}
+\toprule
+XGBoost & \\
+\midrule
+Precisión & 0,685 \\
+Exhaustividad (recall) & 0,691 \\
+Valor F1 & 0,688 \\
+AUC & 0,837 \\
+\bottomrule
+\end{tabular}
+\caption{Precisión, exhaustividad, F1 y AUC de XGBoost en el test oficial (umbral de Youden).}
+\label{tab:met-xgb}
 \end{table}
 
 \begin{figure}[htbp]\centering\includegraphics[width=\rocw]{roc_xgboost}
