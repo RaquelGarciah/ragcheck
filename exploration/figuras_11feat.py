@@ -35,7 +35,7 @@ TASK_COLOR = {"Data2txt": CB[0], "QA": CB[1], "Summary": CB[2]}
 CHOSEN = ["containment", "task_QA", "task_Summary", "task_Data2txt", "num_context",
           "answer_len", "jaccard", "sent_cont_min", "novel_bigram", "num_overlap",
           "sent_sim_min"]
-# Hiperparámetros del ganador (grid search sobre las 11 vars, en eval_rfe_models).
+# Hiperparámetros del ganador (grid search ampliado sobre las 11 vars, grid_tables.py).
 WIN = {"max_depth": 6, "learning_rate": 0.05}
 
 
