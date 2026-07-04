@@ -38,113 +38,89 @@
 
 \begin{document}
 
-\chapter{Resultados}
+\chapter{Caso de estudio: detector de alucinaciones en RAG}
 
-El propósito de este capítulo es reconstruir, paso a paso, cómo se construye un detector
-de alucinaciones para sistemas RAG con aprendizaje automático clásico, y presentar los
-resultados que alcanza. El recorrido sigue el orden natural de un problema de aprendizaje
-supervisado: primero se presenta la base de datos y se caracteriza el fenómeno que se
-quiere detectar; después se transforman los textos en variables mediante ingeniería de
-características y se selecciona un subconjunto con un método formal; a continuación se
-fijan las métricas y la metodología de evaluación; luego se entrena y compara cada modelo
-y se elige un ganador; y por último se sitúa el resultado frente al estado del arte. Dos
-aspectos reciben atención especial por su peso en este problema concreto: la
-\emph{ingeniería de características}, donde reside casi toda la señal, y el
-\emph{desbalance de clases}, que condiciona la decisión final. Las vías que no funcionaron
-se recogen, condensadas, al final del capítulo.
+El propósito de este capítulo es aplicar las técnicas y modelos descritos previamente para construir un detector de alucinaciones para sistemas RAG usando machine learning clásico y presentar y comparar los resultados con los obtenidos mediante técnicas más sofisticadas y costosas computacionalmente. 
 
-% ###########################################################################
-% 1. INTRODUCCIÓN BREVE AL PROBLEMA
-% ###########################################################################
-\section{Introducción al problema}
+Un sistema RAG responde a una consulta en dos fases:
+\begin{itemize}
+  \item \textbf{Recuperación} (\emph{retrieval}): a partir de la consulta, el
+        sistema busca en una base documental las partes más relevantes y los
+        recupera como contexto.
+  \item \textbf{Generación} (\emph{generation}): un modelo de lenguaje redacta la
+        respuesta condicionado al contexto, que llamamos fuente.
+\end{itemize}
 
-Un sistema de generación aumentada por recuperación (RAG, \emph{Retrieval-Augmented
-Generation}) responde a una consulta en dos fases: primero \emph{recupera} uno o varios
-documentos relevantes de una base documental, y después, condicionado a ellos,
-\emph{genera} una respuesta en lenguaje natural \cite{lewis2020rag}. La promesa de RAG es
-anclar la respuesta en fuentes concretas para reducir las invenciones del modelo. Sin
-embargo aparece un fallo específico: el sistema \emph{alucina} cuando la respuesta afirma
-algo que el documento recuperado no respalda \cite{ji2023survey}.
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  box/.style={rectangle, rounded corners, draw, align=center, inner sep=6pt, font=\small},
+  >={Stealth[]}, node distance=1.1cm and 1.4cm
+]
+\node[box, fill=blue!5] (q) {Consulta};
+\node[box, fill=green!8, right=of q] (ret) {\textbf{Recuperación}\\\footnotesize retrieval};
+\node[box, fill=gray!8, above=of ret] (kb) {Base documental};
+\node[box, fill=orange!8, right=of ret] (gen) {\textbf{Generación}\\\footnotesize generation};
+\node[box, fill=blue!5, right=of gen] (r) {Respuesta};
+\draw[->] (q) -- (ret);
+\draw[->] (kb) -- (ret);
+\draw[->] (ret) -- node[above, font=\footnotesize] {fuente} (gen);
+\draw[->] (gen) -- (r);
+\end{tikzpicture}
+\caption{Las dos fases de un sistema RAG.}
+\label{fig:rag}
+\end{figure}
 
-Este trabajo aborda solo la segunda fase. Se da la recuperación por hecha y se estudia el
-paso de \emph{fidelidad} (\emph{faithfulness}): dado el par (respuesta, fuente), decidir
-si la respuesta contiene alguna alucinación. No se construye ningún recuperador; la fuente
-es el documento que RAGTruth proporciona ya emparejado con la respuesta. Detectar estas
-alucinaciones importa porque un sistema que inventa datos con tono seguro es peligroso en
-aplicaciones reales. Hoy se detectan sobre todo con un modelo de lenguaje grande actuando
-de juez \cite{zheng2023judge}, lo que es caro, lento y opaco. El objetivo de este trabajo
-es construir un detector \emph{clásico}, barato, determinista e interpretable, que use solo
-características léxicas y estadísticas y un clasificador clásico. La hipótesis falsable que
-guía el trabajo es que tal detector alcanza un AUC-ROC de al menos $0{,}80$ sobre RAGTruth
-bajo una evaluación honesta.
+Este trabajo se centra en la segunda fase. Un RAG genera una respuesta en base a una fuente y definiremos una alucinación como una respuesta que no está respaldada por la fuente. 
+
+Así, nuestro objetivo es construir un clasificador que, dado el par (respuesta, fuente), decida si la respuesta contiene alguna alucinación, usando exclusivamente aprendizaje automático clásico y características léxicas y estadísticas, sin redes neuronales ni llamadas a LLMs. La motivación es reproducir, a coste mucho menor, lo que hoy hace un evaluador tipo \emph{LLM como juez}, con un modelo barato, interpretable y determinista.
+
 
 % ###########################################################################
-% 2. PRESENTACIÓN DE LA BASE DE DATOS
+% 1. PRESENTACIÓN DE LA BASE DE DATOS
 % ###########################################################################
 \section{Presentación de la base de datos}
 
-\subsection{Composición}
-
-Se emplea RAGTruth \cite{niu2024ragtruth}, el primer corpus a gran escala de salidas de
-modelos de lenguaje anotadas por humanos a nivel de \emph{tramo} (\emph{span}) según
-contengan o no alucinaciones. Consta de $17\,790$ respuestas generadas por seis modelos
-distintos (GPT-4, GPT-3.5-turbo, Llama-2-7B/13B/70B y Mistral-7B) sobre $2\,965$
-\emph{prompts}, y cubre tres tareas de naturaleza muy distinta:
+Primero presentaremos con detalle la base de datos que utilizaremos en la experimentación. Trabajamos con la versión ya procesada de RAGTruth, una base de datos creada por Niu et al.\ en 2024 \cite{niu2024ragtruth} que consta de 17.790 respuestas de LLMs etiquetadas por humanos a nivel de tramo según contengan o no alucinaciones. Dichas respuestas fueron generadas por seis modelos distintos (GPT-4, GPT-3.5-turbo, Llama-2-7B/13B/70B y Mistral-7B) sobre 2.965 prompts y cubren tres tareas de distinta naturaleza:
 
 \begin{itemize}
-  \item \textbf{QA} (respuesta a preguntas): dada una pregunta y unos pasajes recuperados,
-        el modelo redacta una respuesta. La fuente es texto en prosa.
-  \item \textbf{Data2txt} (generación a partir de datos): dado un registro estructurado en
-        JSON de un negocio del Yelp Open Dataset, el modelo redacta una descripción. La
+  \item \textbf{QA}: dada una pregunta el modelo redacta una respuesta. La fuente es texto en prosa.
+  \item \textbf{Data2txt}: dado un registro estructurado el modelo redacta una descripción. La
         fuente son campos estructurados.
-  \item \textbf{Summary} (resumen): dado un documento (noticias de CNN/DailyMail), el
+  \item \textbf{Summary}: dado un documento el
         modelo produce un resumen. La fuente es un documento largo.
 \end{itemize}
 
-Se trabaja con la partición oficial del corpus: $15\,090$ respuestas de entrenamiento y
-$2\,700$ de test. La partición oficial se respeta para poder comparar con el estado del
-arte, que se evalúa sobre ese mismo test.
+Se trabajará con la partición oficial del corpus: $15\,090$ respuestas de entrenamiento y
+$2\,700$ de test  para poder comparar con el estado del arte.
 
-\subsection{Variables}
+La base inicialmente está formada por 11 variables entre las que se incluyen la consulta, la calidad de respuesta y la temperatura de muestreo con la que se generó; aunque nosotros solo haremos uso de las cinco siguientes.
+\begin{itemize}
+  \item \textbf{Context}: Contexto que debe respaldar la respuesta.
+  \item \textbf{Output}: Respuesta generada por el modelo de lenguaje
+  \item \textbf{Task type}: 
+  \begin{itemize}
+    \item \textbf{QA} 
+    \item \textbf{Data2txt} 
+    \item \textbf{Summary} 
+  \end{itemize}
+  \item \textbf{Model}: Modelo de lenguaje que genera la respuesta.
+  \begin{itemize}
+    \item \textbf{GPT-4} 
+    \item \textbf{GPT-3.5-turbo} 
+    \item \textbf{Llama-2-7B} 
+    \item \textbf{Llama-2-13B} 
+    \item \textbf{Llama-2-70B} 
+    \item \textbf{Mistral-7B} 
+  \end{itemize}
+  \item \textbf{Hallucination labels}: Lista de tramos alucinados con su correspondiente tipo de alucinación. Anotadas por un humano.
+\end{itemize}
 
-Cada registro del corpus aporta las variables de origen del Cuadro~\ref{tab:vars}. El
-hecho determinante para todo lo que sigue es que la entrada del problema es \emph{texto},
-no un vector numérico, lo que obliga a la ingeniería de características de la
-sección~\ref{sec:fe}.
-
-\begin{table}[htbp]
-\centering
-\small
-\begin{tabular}{lp{9.3cm}}
-\toprule
-Variable & Descripción \\
-\midrule
-\tc{response} & Respuesta generada por el modelo de lenguaje (el texto a auditar). \\
-\tc{source} & Documento fuente recuperado (el contexto que debe respaldar la respuesta). \\
-\tc{task\_type} & Tarea: QA, Data2txt o Summary. \\
-\tc{model} & Modelo de lenguaje que generó la respuesta. \\
-\tc{hallucination\_labels} & Anotación humana: lista de tramos (\emph{spans}) alucinados,
-con su tipo. \\
-\bottomrule
-\end{tabular}
-\caption{Variables de origen de RAGTruth. La variable objetivo se deriva de
-\tc{hallucination\_labels} (sección~\ref{sec:target}).}
-\label{tab:vars}
-\end{table}
-
-\subsection{Variable objetivo}
+Esta última variable \tc{hallucination\_labels} marca las alucinaciones.
 \label{sec:target}
-
-La anotación \tc{hallucination\_labels} marca, dentro de cada respuesta, los tramos
-concretos que alucinan y de qué tipo son. A partir de ella se define la variable objetivo
+A partir de ella se define la variable objetivo
 binaria a nivel de respuesta: se etiqueta \tc{label}${}=1$ (alucina) si la respuesta
-contiene al menos un tramo anotado, y \tc{label}${}=0$ (limpia) en caso contrario. La
-anotación aparece en el corpus en tres formatos (lista vacía, lista con tramos, o cadena
-de texto que representa la lista); los tres se normalizan al construir la etiqueta. La
-tarea es, por tanto, de \textbf{clasificación binaria a nivel de respuesta}. Se elige el
-nivel de respuesta, y no el de tramo, porque es la formulación que también usa el estado
-del arte con el que se comparará (sección~\ref{sec:sota}), lo que hace las cifras
-directamente comparables.
+contiene al menos un tramo anotado, y \tc{label}${}=0$ (limpia) en caso contrario.
 
 \subsection{Descriptivo y caracterización de las alucinaciones}
 
@@ -190,6 +166,7 @@ de ejemplos por tarea en entrenamiento y test.}
 \end{figure}
 
 \subsubsection{Nivel por tareas}
+\label{sec:target}
 
 El desbalance global es moderado, pero engaña: al abrirlo por tarea
 (Cuadro~\ref{tab:prev} y Figura~\ref{fig:prev}) aparece la estructura real. Data2txt es
@@ -242,8 +219,6 @@ alucinaciones \emph{evidentes sin base} de tipo numérico, que domina en Data2tx
 aritmética de conjuntos es más fiable que el juicio semántico, y ahí el detector clásico
 es competitivo o superior a coste nulo.
 
-% FIGURA CC: es un esquema TikZ ya escrito abajo; no requiere imagen externa. Si se
-% prefiere una versión .pdf/.png, reproducir el mismo contenido.
 \begin{figure}[htbp]
 \centering
 \begin{tikzpicture}[
