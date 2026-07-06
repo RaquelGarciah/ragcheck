@@ -437,7 +437,7 @@ variables deja de aportar o dicho de otra forma, el número de variables óptima
 
 Hemos establecido el ranking sobre el XGBoost, la Figura~\ref{fig:codo} muestra cómo el AUC sube de golpe hasta que llegamos a seis variables y
 luego se aplana y el F1 alcanza el codo en $k=11$. Se fija
-el conjunto en \textbf{once variables}. El coseno TF-IDF no entra en la selección, su importancia está por debajo de $0{,}004$, resultado coherente con que la redundancia demostrada con \tc{containment}. En la gráfica precisión y recall se mueven en espejo, cada variable que sube una baja la otra, mientras su media armónica (el F1) apenas cambia.
+el conjunto en \textbf{once variables}. El coseno TF-IDF no entra en la selección, su importancia está por debajo de $0{,}004$, resultado coherente con que la redundancia demostrada con \tc{containment}. En la gráfica precisión y recall se mueven en espejo, cada variable que sube una baja la otra, mientras su media armónica F1 apenas cambia.
 
 \begin{figure}[H]
   \centering
@@ -596,18 +596,15 @@ umbral (a). Las tres estrategias de umbral por tarea sobre el test (b).}
 
 La experimentación se organiza en torno a los siguientes recursos:
 \begin{itemize}
-  \item \textbf{Base de datos.} Se ha descargado  desde Hugging Face, una
-plataforma que aloja bases de datos y modelos abiertos para machine learning, y se cachea en
-local. La fuente original es el corpus RAGTruth~\cite{niu2024ragtruth}, un
+  \item \textbf{Base de datos.} Descargamos la base desde Hugging Face, una
+plataforma que aloja bases de datos y modelos abiertos para machine learning, mediante este enlace https://huggingface.co/datasets/wandb/RAGTruth-processed. La fuente original es el corpus RAGTruth~\cite{niu2024ragtruth}, un
 conjunto de respuestas de modelos de lenguaje anotadas por humanos a nivel de tramo según
 contengan o no alucinaciones.
 
 \item \textbf{Reentrenamiento y evaluación.} Se ha utilizado Python 3.12. El código se organiza como
 una librería instalable de elaboración propia, \tc{ragcheck}, disponible en mi repositorio
-público de GitHub (\url{https://github.com/RaquelGarciah/ragcheck}). La librería contiene el
-motor reutilizable y testeado (carga y etiquetado de datos, construcción de características,
-entrenamiento con validación cruzada, métricas e inferencia), y sobre ella se apoyan los
-siguientes scripts, cada uno con una única responsabilidad:
+público de GitHub (TODAVIA NO LO HE SUBIDO). Se apoya en los
+siguientes scripts:
 \begin{itemize}
   \item \tc{visualization.py}: elabora los gráficos que ofrecen una visión general de la base
         de datos.
@@ -625,8 +622,7 @@ siguientes scripts, cada uno con una única responsabilidad:
 machine learning: \tc{pandas}, \tc{numpy}, \tc{scikit-learn}, \tc{xgboost}, \tc{matplotlib} y
 \tc{seaborn}, más \tc{spaCy} para el descriptivo de entidades. El trabajo es determinista para poder ser reproducido:
 semilla fija ($42$) en \tc{numpy}, \tc{scikit-learn} y \tc{xgboost}, de modo que el mismo código
-y los mismos datos producen siempre el mismo resultado, y una batería de tests (incluido uno que
-verifica la ausencia de fuga en GroupKFold) protege el motor.
+y los mismos datos producen siempre el mismo resultado.
 \end{itemize}
 
 % 
@@ -1263,7 +1259,7 @@ Para cerrar el capítulo situamos el detector clásico haciendo un balance entre
 global al juez GPT-4-turbo ($63{,}4$) y al encoder Luna ($65{,}4$), y quedamos entre diez y
 quince puntos por debajo de los detectores neuronales ($79$--$84$). En \textbf{precio
 y complejidad} nuestro modelo es el ganador. El patrón por tarea
-es común a todos: Data2txt fácil, QA y Summary mucho más difíciles. Al final llegamos al mismo problema que modelos mucho mayores.
+es común a todos: Data2txt fácil, QA y Summary mucho más difíciles. Al final nos encontramos con el mismo problema que modelos mucho mayores.
 
 \bibliographystyle{plain}
 \bibliography{referencias}
