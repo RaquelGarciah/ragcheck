@@ -34,13 +34,12 @@ from ragcheck import evaluate as ev  # noqa: E402
 from ragcheck.data import load_ragtruth  # noqa: E402
 from ragcheck.features import extract_features  # noqa: E402
 from ragcheck.models import build_xgboost  # noqa: E402
-from ragcheck.plotting import savefig, set_style  # noqa: E402
+from ragcheck.plotting import (  # noqa: E402
+    CLASS_COLOR, TASK_COLOR, coma, eje_coma, savefig, set_style)
 from ragcheck.training import cross_validate  # noqa: E402
 
 TASKS = ("Data2txt", "QA", "Summary")
-# Colores por tarea, coherentes en todas las figuras (paleta colorblind).
 _CB = sns.color_palette("colorblind")
-TASK_COLOR = {"Data2txt": _CB[0], "QA": _CB[1], "Summary": _CB[2]}
 
 
 # --------------------------------------------------------------------------- #
@@ -83,24 +82,54 @@ def metrics(y, pred):
 # --------------------------------------------------------------------------- #
 # Figuras
 # --------------------------------------------------------------------------- #
+def _prev(df, k):
+    """Prevalencia de alucinación en `df`, global (`k="Global"`) o de una tarea."""
+    d = df if k == "Global" else df[df["task_type"] == k]
+    return float(d["label"].mean())
+
+
+def fig_donuts_clase(tr):
+    """Donuts de composición de clase (alucina/limpia): global y por tarea (train)."""
+    from matplotlib.patches import Patch
+
+    groups = [("Global", tr)] + [(k, tr[tr["task_type"] == k]) for k in TASKS]
+    fig, axes = plt.subplots(1, 4, figsize=(11, 3.2))
+    for ax, (name, d) in zip(axes, groups):
+        prev = float(d["label"].mean())
+        ax.pie([prev, 1 - prev],
+               colors=[CLASS_COLOR["alucina"], CLASS_COLOR["limpia"]],
+               startangle=90, counterclock=False,
+               wedgeprops=dict(width=0.42, edgecolor="white", linewidth=1.5))
+        ax.text(0, 0, f"{coma(prev * 100, 1)}%", ha="center", va="center",
+                fontsize=15, fontweight="bold")
+        ax.set_title(f"{name}\n(n = {len(d):,})".replace(",", "."), fontsize=11)
+    fig.legend([Patch(color=CLASS_COLOR["alucina"]), Patch(color=CLASS_COLOR["limpia"])],
+               ["alucina", "limpia"], loc="lower center", ncol=2, frameon=False,
+               bbox_to_anchor=(0.5, -0.02))
+    fig.suptitle("Composición de clase: fracción de respuestas con alucinación (train)",
+                 y=1.04, fontsize=12)
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    savefig(fig, "desc_donuts_clase")
+
+
 def fig_prevalencia(tr, te):
-    """Prevalencia de alucinación por tarea en train vs test (prior-shift)."""
-    rows = []
-    for split, df in [("train", tr), ("test", te)]:
-        for k in TASKS:
-            m = df["task_type"] == k
-            rows.append({"split": split, "tarea": k, "prev": df.loc[m, "label"].mean()})
-        rows.append({"split": split, "tarea": "GLOBAL", "prev": df["label"].mean()})
-    d = pd.DataFrame(rows)
-    fig, ax = plt.subplots(figsize=(6, 4))
-    sns.barplot(d, x="tarea", y="prev", hue="split", ax=ax,
-                order=["GLOBAL", *TASKS])
-    ax.axhline(0.5, color="grey", ls="--", lw=1)
-    ax.set(xlabel="", ylabel="prevalencia de alucinación", ylim=(0, 1),
-           title="Prevalencia por tarea: train frente a test")
-    for c in ax.containers:
-        ax.bar_label(c, fmt="%.2f", fontsize=8)
-    ax.legend(title="")
+    """Desplazamiento train->test de la prevalencia por tarea (prior-shift), en slope."""
+    cats = ["Global", *TASKS]
+    fig, ax = plt.subplots(figsize=(6.5, 4.2))
+    for k in cats:
+        ptr, pte = _prev(tr, k), _prev(te, k)
+        color = "0.45" if k == "Global" else TASK_COLOR[k]
+        lw = 2.6 if k == "Global" else 2.0
+        ax.plot([0, 1], [ptr, pte], "o-", color=color, lw=lw, ms=8)
+        ax.text(-0.05, ptr, coma(ptr, 3), ha="right", va="center", fontsize=9, color=color)
+        ax.text(1.05, pte, f"{coma(pte, 3)}  {k}", ha="left", va="center", fontsize=9,
+                color=color, fontweight="bold" if k == "Global" else "normal")
+    ax.set_xlim(-0.28, 1.62)
+    ax.set_xticks([0, 1])
+    ax.set_xticklabels(["train", "test"])
+    ax.set(ylabel="prevalencia de alucinación", ylim=(0, 0.78),
+           title="El desbalance se desplaza de train a test")
+    eje_coma(ax, "y", 1)
     savefig(fig, "desb_prevalencia_tarea")
 
 
@@ -368,7 +397,7 @@ def main():
     tr, te = load_ragtruth("train"), load_ragtruth("test")
     Xtr, Xte = extract_features(tr), extract_features(te)
     ytr, yte = tr["label"].values, te["label"].values
-    gtr = tr["source"].values
+    gtr = tr["context"].values
     task_tr, task_te = tr["task_type"].values, te["task_type"].values
     pi_ref = float(ytr.mean())
 
@@ -385,6 +414,7 @@ def main():
     smote_pte = build_xgboost().fit(pd.concat(Xs, ignore_index=True), np.concatenate(ys)).predict_proba(Xte)[:, 1]
 
     print(">> generando figuras...")
+    fig_donuts_clase(tr)
     fig_prevalencia(tr, te)
     fig_barrido_umbral(ytr, ptr)
     fig_estrategias(yte, task_te, pte, ptr, ytr, task_tr)

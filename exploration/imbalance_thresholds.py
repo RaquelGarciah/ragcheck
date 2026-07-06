@@ -95,7 +95,7 @@ def main() -> None:
     tr, te = load_ragtruth("train"), load_ragtruth("test")
     Xtr, Xte = extract_features(tr), extract_features(te)
     ytr, yte = tr["label"].values, te["label"].values
-    gtr = tr["source"].values
+    gtr = tr["context"].values
     task_tr, task_te = tr["task_type"].values, te["task_type"].values
     pi_ref = float(ytr.mean())
 

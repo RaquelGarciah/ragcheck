@@ -1,6 +1,6 @@
 """Evaluación de los 5 modelos sobre el conjunto RFE elegido (11 variables).
 
-Para cada modelo: grid search (GroupKFold por `source`, scoring F1) sobre train
+Para cada modelo: grid search (GroupKFold por `context`, scoring F1) sobre train
 restringido a las 11 variables, refit del mejor, evaluación en el test oficial. Saca
 la tabla comparativa (P/R/F1/AUC/acc), el ganador por promedio F1+AUC, la ROC por
 modelo (roc_<modelo>) y las curvas conjuntas (roc_test_rfe, pr_test_rfe). Escribe
@@ -49,7 +49,7 @@ def main():
     tr, te = load_ragtruth("train"), load_ragtruth("test")
     Xtr = extract_features(tr)[CHOSEN]
     Xte = extract_features(te)[CHOSEN]
-    ytr, yte, g = tr["label"].values, te["label"].values, tr["source"].values
+    ytr, yte, g = tr["label"].values, te["label"].values, tr["context"].values
     print(f"train n={len(ytr)}, test n={len(yte)}, features={len(CHOSEN)}")
 
     rng = np.random.default_rng(SEED)
@@ -115,7 +115,7 @@ def main():
         f.write("# Evaluación en test oficial — conjunto RFE (11 variables)\n\n")
         f.write(f"Variables: {', '.join(CHOSEN)}.\n\n")
         f.write(f"n test = {len(yte)}, prevalencia = {yte.mean():.3f}. Grid search "
-                "GroupKFold por `source` (F1); umbral por Youden.\n\n")
+                "GroupKFold por `context` (F1); umbral por Youden.\n\n")
         f.write(tab.round(3).to_markdown())
         f.write(f"\n\n**Ganador (promedio F1+AUC): {winner}.**\n\n")
         f.write("Hiperparámetros óptimos por modelo:\n\n")

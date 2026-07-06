@@ -30,4 +30,4 @@ def test_esquema_columnas_y_dtypes():
         pytest.skip(f"no se pudo descargar el dataset: {e}")
     assert list(df.columns) == COLUMNS
     assert df["label"].dropna().isin([0, 1]).all()
-    assert df[["source", "response"]].notna().all().all()
+    assert df[["context", "output"]].notna().all().all()

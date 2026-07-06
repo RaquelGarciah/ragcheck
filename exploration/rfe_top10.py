@@ -23,7 +23,7 @@ from ragcheck.models import build_xgboost  # noqa: E402
 from ragcheck.training import cross_validate  # noqa: E402
 
 tr = load_ragtruth("train")
-Xtr, ytr, g = extract_features(tr), tr["label"].values, tr["source"].values
+Xtr, ytr, g = extract_features(tr), tr["label"].values, tr["context"].values
 te = load_ragtruth("test")
 Xte, yte = extract_features(te), te["label"].values
 cols_all = list(Xtr.columns)

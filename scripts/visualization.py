@@ -29,7 +29,7 @@ def main() -> None:
     set_style()
     df = load_ragtruth("train")
     df["clase"] = df["label"].map(LABELS)
-    df["len_resp"] = df["response"].str.split().str.len()
+    df["len_resp"] = df["output"].str.split().str.len()
     X = extract_features(df)
 
     # 1. Balance global de clases.
@@ -55,10 +55,10 @@ def main() -> None:
     savefig(fig, "eda_longitud_por_clase")
 
     # 4. Reuso de documentos (justifica GroupKFold).
-    reuse = df["source"].value_counts()
+    reuse = df["context"].value_counts()
     fig, ax = plt.subplots(figsize=(5, 4))
     sns.histplot(reuse.values, bins=30, ax=ax)
-    ax.set(title="Respuestas por documento", xlabel="nº respuestas por `source`", ylabel="documentos")
+    ax.set(title="Respuestas por documento", xlabel="nº respuestas por `context`", ylabel="documentos")
     savefig(fig, "eda_reuso_documentos")
 
     # 5. Correlación entre features y con la etiqueta.

@@ -3,7 +3,7 @@
 API pública de inferencia rápida:
 
     from ragcheck import score
-    score(response, source)  # -> probabilidad de alucinación en [0, 1]
+    score(output, context)  # -> probabilidad de alucinación en [0, 1]
 """
 
 from ragcheck.inference import load_model, score

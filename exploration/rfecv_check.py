@@ -3,7 +3,7 @@
 Borrador (NO citable). Segundo método wrapper para la selección de variables, como
 contraste del forward stepwise. RFECV (Guyon et al., 2002) elimina recursivamente la
 feature menos importante y elige por validación cruzada el número óptimo. Protocolo
-honesto: GroupKFold por `source`, scoring F1. Solo aplica a modelos con importancias
+honesto: GroupKFold por `context`, scoring F1. Solo aplica a modelos con importancias
 (logreg, random_forest, xgboost); SVM-RBF y KNN no exponen `coef_`/`feature_importances_`.
 
 Para cada modelo compara TODAS las métricas OOF (auc, f1, recall, precision, acc,
@@ -60,7 +60,7 @@ def main():
     df = load_ragtruth("train")
     X = extract_features(df)
     y = df["label"].values
-    groups = df["source"].values
+    groups = df["context"].values
     Xs = pd.DataFrame(StandardScaler().fit_transform(X), columns=X.columns, index=X.index)
 
     # Estimadores con importancias válidas para RFE (el ranking usa coef_/importances).

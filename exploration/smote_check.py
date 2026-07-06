@@ -88,7 +88,7 @@ def main() -> None:
     tr, te = load_ragtruth("train"), load_ragtruth("test")
     Xtr, Xte = extract_features(tr), extract_features(te)
     ytr, yte = tr["label"].values, te["label"].values
-    gtr, task_tr, task_te = tr["source"].values, tr["task_type"].values, te["task_type"].values
+    gtr, task_tr, task_te = tr["context"].values, tr["task_type"].values, te["task_type"].values
 
     # Umbrales honestos: Youden global y max-F1 por tarea desde el OOF de train.
     ptr = cross_validate(build_xgboost(), Xtr, ytr, gtr)["y_prob"]

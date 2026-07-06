@@ -142,8 +142,8 @@ def test_sent_features_deterministas():
 def test_extract_features_esquema():
     df = pd.DataFrame(
         {
-            "response": ["the cat", "1999 aqui"],
-            "source": ["the cat mat", "año 2020"],
+            "output": ["the cat", "1999 aqui"],
+            "context": ["the cat mat", "año 2020"],
             "task_type": ["QA", "Data2txt"],
         }
     )
@@ -164,6 +164,6 @@ def test_extract_features_esquema():
 
 def test_extract_features_sin_task_type():
     # Sin la columna task_type no se añaden las one-hot (contrato de inferencia).
-    df = pd.DataFrame({"response": ["the cat"], "source": ["the cat mat"]})
+    df = pd.DataFrame({"output": ["the cat"], "context": ["the cat mat"]})
     feats = extract_features(df)
     assert list(feats.columns) == [*FEATURES, *SENTENCE_FEATURES]

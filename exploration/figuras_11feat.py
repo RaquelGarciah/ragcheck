@@ -66,7 +66,7 @@ def main():
     tr, te = load_ragtruth("train"), load_ragtruth("test")
     Xtr, Xte = extract_features(tr)[CHOSEN], extract_features(te)[CHOSEN]
     ytr, yte = tr["label"].values, te["label"].values
-    g, task_tr, task_te = tr["source"].values, tr["task_type"].values, te["task_type"].values
+    g, task_tr, task_te = tr["context"].values, tr["task_type"].values, te["task_type"].values
 
     ptr = cross_validate(win_xgb(), Xtr, ytr, g)["y_prob"]
     pte = win_xgb().fit(Xtr, ytr).predict_proba(Xte)[:, 1]

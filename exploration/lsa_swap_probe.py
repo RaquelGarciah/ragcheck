@@ -12,9 +12,9 @@ from ragcheck.features import extract_features
 from ragcheck.models import build_xgboost
 
 df = load_ragtruth("train")
-X = extract_features(df); y = df["label"].values; groups = df["source"].values
+X = extract_features(df); y = df["label"].values; groups = df["context"].values
 tasks = df["task_type"].values
-resp = list(df["response"]); src = list(df["source"])
+resp = list(df["output"]); src = list(df["context"])
 
 
 def lsa_cos_perfold(tr, te):

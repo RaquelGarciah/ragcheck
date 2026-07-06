@@ -2,7 +2,7 @@
 
 Borrador (NO citable como código; produce figura citable). RFECV (Guyon et al.,
 2002) elimina recursivamente la feature menos importante y elige por validación
-cruzada cuántas conservar. Protocolo honesto: GroupKFold por `source`, scoring AUC
+cruzada cuántas conservar. Protocolo honesto: GroupKFold por `context`, scoring AUC
 (métrica interna, independiente del umbral). Solo modelos con importancias
 (logreg estandarizado, random_forest, xgboost). Genera fsel_rfecv.png.
 """
@@ -34,7 +34,7 @@ def main():
     df = load_ragtruth("train")
     X = extract_features(df)
     y = df["label"].values
-    groups = df["source"].values
+    groups = df["context"].values
     Xs = pd.DataFrame(StandardScaler().fit_transform(X), columns=X.columns, index=X.index)
 
     models = {

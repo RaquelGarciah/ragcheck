@@ -1,7 +1,7 @@
 """Selección de variables forward stepwise (wrapper) por modelo.
 
 Responde: ¿cuántas features hacen falta de verdad, o sobran? Para cada modelo se
-hace forward selection greedy maximizando F1 en GroupKFold por `source`, y se
+hace forward selection greedy maximizando F1 en GroupKFold por `context`, y se
 registran las seis métricas (auc, f1, recall, precision, acc, bal_acc) en cada
 tamaño de subconjunto. La curva es OOF: si se aplana, las features extra son
 redundantes; si baja, hay overfitting.
@@ -83,7 +83,7 @@ def main():
     df = load_ragtruth("train")
     X = extract_features(df)
     y = df["label"].values
-    groups = df["source"].values
+    groups = df["context"].values
 
     # SVM sobre submuestra por coste (RBF + probability es O(n^2) por fold).
     rng = np.random.default_rng(SEED)

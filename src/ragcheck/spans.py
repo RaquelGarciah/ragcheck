@@ -45,12 +45,12 @@ def span_distributions(df: pd.DataFrame) -> pd.DataFrame:
     """
     nlp = _nlp()
     rows = []
-    for response, labels, task in zip(
-        df["response"], df["hallucination_labels"], df["task_type"]
+    for output, labels, task in zip(
+        df["output"], df["hallucination_labels"], df["task_type"]
     ):
-        n = max(len(response), 1)
+        n = max(len(output), 1)
         for sp in parse_spans(labels):
-            text = sp.get("text", response[sp["start"] : sp["end"]])
+            text = sp.get("text", output[sp["start"] : sp["end"]])
             doc = nlp(text)
             pos = doc[0].pos_ if len(doc) else "NONE"
             entity = doc.ents[0].label_ if doc.ents else "NONE"

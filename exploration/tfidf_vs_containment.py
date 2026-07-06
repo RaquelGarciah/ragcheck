@@ -10,7 +10,7 @@ from ragcheck.training import cross_validate
 pd.set_option("display.width", 200)
 
 df = load_ragtruth("train")
-X = extract_features(df); y = df["label"].values; groups = df["source"].values
+X = extract_features(df); y = df["label"].values; groups = df["context"].values
 tasks = df["task_type"].values
 
 

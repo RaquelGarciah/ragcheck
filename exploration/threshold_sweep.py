@@ -5,7 +5,7 @@ precision/recall/F1/balanced-accuracy al mover el umbral, y qué criterio de
 selección de umbral conviene? Se compara con lo que hace Sergio (umbral fijo
 0.5) frente a lo nuestro (Youden sobre las OOF).
 
-Usa OOF de GroupKFold por `source` (mismo protocolo honesto que el resto del
+Usa OOF de GroupKFold por `context` (mismo protocolo honesto que el resto del
 repo). Dos modelos representativos: logreg (lineal) y xgboost (fuerte).
 """
 
@@ -108,7 +108,7 @@ def main():
     df = load_ragtruth("train")
     X = extract_features(df)
     y = df["label"].values
-    groups = df["source"].values
+    groups = df["context"].values
     grid = np.arange(0.1, 0.91, 0.1)
 
     for name, build in [("logreg", build_logreg), ("xgboost", build_xgboost)]:

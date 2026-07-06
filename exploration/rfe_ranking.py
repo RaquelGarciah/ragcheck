@@ -30,7 +30,7 @@ def main():
     df = load_ragtruth("train")
     X = extract_features(df)
     y = df["label"].values
-    groups = df["source"].values
+    groups = df["context"].values
 
     rank = {}
     for name, build in BUILDERS.items():

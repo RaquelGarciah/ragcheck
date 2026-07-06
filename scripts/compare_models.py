@@ -1,7 +1,7 @@
 """Comparativa de los cinco modelos: reproduce la línea base del TFG.
 
 Entrena y evalúa los cinco clasificadores con la misma partición GroupKFold por
-`source`, consolida las métricas A–F en una tabla comparativa (con IC de
+`context`, consolida las métricas A–F en una tabla comparativa (con IC de
 bootstrap para el AUC), superpone las curvas ROC y PR, y añade baselines
 honestos (azar, clase mayoritaria, una sola feature). Escribe
 outputs/reports/e0_baseline.md y las figuras en outputs/figures/.
@@ -54,7 +54,7 @@ def main() -> None:
     df = load_ragtruth("train")
     X = extract_features(df)
     y = df["label"].values
-    groups = df["source"].values
+    groups = df["context"].values
 
     rows, curves = [], {}
     for name, build in BUILDERS.items():
@@ -93,8 +93,8 @@ def main() -> None:
     report = REPORTS_DIR / "e0_baseline.md"
     with open(report, "w") as f:
         f.write("# E0 — Línea base: comparativa de modelos\n\n")
-        f.write(f"n = {len(df)} respuestas, {df['source'].nunique()} documentos.\n\n")
-        f.write("Validación GroupKFold por `source`. Umbral por índice de Youden.\n\n")
+        f.write(f"n = {len(df)} respuestas, {df['context'].nunique()} documentos.\n\n")
+        f.write("Validación GroupKFold por `context`. Umbral por índice de Youden.\n\n")
         f.write(table.round(3).to_markdown())
         f.write("\n\nFiguras: `outputs/figures/roc_modelos.*`, `pr_modelos.*`.\n")
     print(f"\nInforme -> {report}")

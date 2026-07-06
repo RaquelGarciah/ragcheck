@@ -17,8 +17,8 @@ def main(argv: list[str] | None = None) -> None:
     p_eval.add_argument("--model", default="logreg")
 
     p_score = sub.add_parser("score", help="Puntúa un par (respuesta, fuente).")
-    p_score.add_argument("--response", required=True)
-    p_score.add_argument("--source", required=True)
+    p_score.add_argument("--output", required=True)
+    p_score.add_argument("--context", required=True)
 
     args = parser.parse_args(argv)
 
@@ -29,7 +29,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "score":
         from ragcheck.inference import score
 
-        print(score(args.response, args.source))
+        print(score(args.output, args.context))
 
 
 if __name__ == "__main__":

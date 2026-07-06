@@ -2,17 +2,17 @@
 
 Variables: containment, task_QA, task_Summary, task_Data2txt, num_context, answer_len, jaccard, sent_cont_min, novel_bigram, num_overlap, sent_sim_min.
 
-Grid search GroupKFold por `source` (F1); umbral por Youden. n test = 2700.
+Grid search GroupKFold por `context` (F1); umbral de Youden fijado sobre las OOF de train (no sobre test). n test = 2700.
 
 ## Comparativa y ganador
 
 | modelo        |   AUC |    F1 |   precisión |   recall |   accuracy |   bal_acc |   prom_F1_AUC |
 |:--------------|------:|------:|------------:|---------:|-----------:|----------:|--------------:|
-| xgboost       | 0.837 | 0.688 |       0.685 |    0.691 |      0.781 |     0.76  |         0.763 |
-| svm           | 0.819 | 0.692 |       0.704 |    0.681 |      0.789 |     0.764 |         0.756 |
-| random_forest | 0.833 | 0.677 |       0.655 |    0.701 |      0.767 |     0.751 |         0.755 |
-| knn           | 0.826 | 0.677 |       0.73  |    0.631 |      0.79  |     0.753 |         0.752 |
-| logreg        | 0.798 | 0.659 |       0.622 |    0.7   |      0.747 |     0.736 |         0.728 |
+| xgboost       | 0.837 | 0.685 |       0.673 |    0.698 |      0.776 |     0.758 |         0.761 |
+| random_forest | 0.833 | 0.677 |       0.656 |    0.699 |      0.767 |     0.751 |         0.755 |
+| svm           | 0.819 | 0.685 |       0.67  |    0.701 |      0.775 |     0.758 |         0.752 |
+| knn           | 0.826 | 0.669 |       0.646 |    0.695 |      0.76  |     0.745 |         0.748 |
+| logreg        | 0.798 | 0.654 |       0.594 |    0.726 |      0.731 |     0.73  |         0.726 |
 
 **Ganador (promedio F1+AUC): xgboost.**
 

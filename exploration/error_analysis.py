@@ -14,7 +14,7 @@ Contraste con datos:
    Summary: si los FN tienen containment más alto, el modelo falla justo donde la
    señal léxica desaparece.
 
-Protocolo honesto: OOF de GroupKFold por `source`, xgboost.
+Protocolo honesto: OOF de GroupKFold por `context`, xgboost.
 """
 
 import random
@@ -46,7 +46,7 @@ def _spans_table(df: pd.DataFrame) -> pd.DataFrame:
     """Una fila por span alucinado: tarea, tipo y containment del texto vs fuente."""
     rows = []
     for src, labels, task in zip(
-        df["source"], df["hallucination_labels"], df["task_type"]
+        df["context"], df["hallucination_labels"], df["task_type"]
     ):
         for sp in parse_spans(labels):
             text = sp.get("text", "")
@@ -65,7 +65,7 @@ def _spans_table(df: pd.DataFrame) -> pd.DataFrame:
 def _span_containment_by_row(df: pd.DataFrame) -> np.ndarray:
     """Containment medio de los spans de cada fila (NaN si la fila está limpia)."""
     out = np.full(len(df), np.nan)
-    for i, (src, labels) in enumerate(zip(df["source"], df["hallucination_labels"])):
+    for i, (src, labels) in enumerate(zip(df["context"], df["hallucination_labels"])):
         conts = [containment(sp.get("text", ""), src) for sp in parse_spans(labels)]
         conts = [c for c in conts if c is not None]
         if conts:
@@ -78,7 +78,7 @@ def main() -> None:
     df = load_ragtruth("train", keep_spans=True)
     X = extract_features(df)
     y = df["label"].values
-    groups = df["source"].values
+    groups = df["context"].values
     p = cross_validate(build_xgboost(), X, y, groups)["y_prob"]
     df = df.assign(p=p, y=y)
 

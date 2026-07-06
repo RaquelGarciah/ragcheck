@@ -35,7 +35,7 @@ WIN = {"max_depth": 6, "learning_rate": 0.05}
 
 def eda_global(tr, te):
     """Panel (a) longitud de respuesta global; (b) nº de ejemplos por tarea train/test."""
-    length = tr["response"].str.split().str.len()
+    length = tr["output"].str.split().str.len()
     fig, axes = plt.subplots(1, 2, figsize=(9, 3.6))
     sns.histplot(length[length < length.quantile(0.99)], bins=40, ax=axes[0], color=CB[0])
     axes[0].set(xlabel="longitud de la respuesta (tokens)", ylabel="nº respuestas",
@@ -91,15 +91,15 @@ def main():
 
     print("\n=== Candidatos de par real Data2txt (train) ===")
     d = tr[tr["task_type"] == "Data2txt"].copy()
-    d["rlen"] = d["response"].str.split().str.len()
-    d["slen"] = d["source"].str.split().str.len()
+    d["rlen"] = d["output"].str.split().str.len()
+    d["slen"] = d["context"].str.split().str.len()
     # Cortos, para que quepan en la tabla.
     for lab in (0, 1):
         cand = d[(d["label"] == lab) & (d["rlen"].between(20, 45)) & (d["slen"] < 80)].head(3)
         print(f"\n--- label={lab} ---")
         for _, r in cand.iterrows():
-            print(f"[id={r['id']}] SOURCE: {r['source'][:260]}")
-            print(f"          RESP:   {r['response'][:260]}")
+            print(f"[id={r['id']}] SOURCE: {r['context'][:260]}")
+            print(f"          RESP:   {r['output'][:260]}")
             if lab == 1:
                 print(f"          SPANS:  {r['hallucination_labels']}")
 

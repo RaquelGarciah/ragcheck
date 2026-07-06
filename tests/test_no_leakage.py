@@ -1,6 +1,6 @@
-"""Test crítico: la partición GroupKFold por `source` no filtra documentos.
+"""Test crítico: la partición GroupKFold por `context` no filtra documentos.
 
-En cada fold, ninguna `source` aparece a la vez en train y test. Su fallo
+En cada fold, ninguna `context` aparece a la vez en train y test. Su fallo
 bloquea cualquier merge a main.
 """
 
@@ -11,7 +11,7 @@ from ragcheck.config import N_SPLITS
 
 
 def test_groupkfold_sin_solape_de_source():
-    # Documentos repetidos: cada `source` aparece en varias filas.
+    # Documentos repetidos: cada `context` aparece en varias filas.
     groups = np.repeat(np.arange(20), 5)  # 20 fuentes, 5 respuestas cada una
     X = np.zeros((groups.size, 1))
     y = np.random.RandomState(0).randint(0, 2, size=groups.size)

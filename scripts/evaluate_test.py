@@ -1,7 +1,7 @@
 """Evaluación final honesta en el split de test oficial de RAGTruth.
 
 Carga los cinco modelos ya ajustados (grid search sobre train, GroupKFold por
-`source`), los evalúa sobre el test oficial (que no se ha tocado al entrenar) y
+`context`), los evalúa sobre el test oficial (que no se ha tocado al entrenar) y
 consolida la tabla comparativa por secciones A–F. Es el número definitivo y
 defendible de cada modelo. Genera outputs/reports/test_oficial.md y las figuras
 roc_test / pr_test.
@@ -73,7 +73,7 @@ def main() -> None:
     with open(report, "w") as f:
         f.write("# Evaluación en el test oficial de RAGTruth\n\n")
         f.write(f"n = {len(df)} respuestas; fracción que alucina = {y.mean():.3f}.\n\n")
-        f.write("Modelos ajustados por grid search (GroupKFold por `source`) sobre train, ")
+        f.write("Modelos ajustados por grid search (GroupKFold por `context`) sobre train, ")
         f.write("evaluados sobre el test oficial. Umbral por Youden.\n\n")
         f.write(table.round(3).to_markdown())
         f.write("\n\nFiguras: `outputs/figures/roc_test.*`, `pr_test.*`.\n")

@@ -1,7 +1,7 @@
 """Features léxicas y estadísticas sobre el par (respuesta, fuente).
 
 Notación: R = palabras únicas de la respuesta, F = palabras únicas de la
-fuente. Todas las funciones reciben `(response, source)` y devuelven un float.
+fuente. Todas las funciones reciben `(output, context)` y devuelven un float.
 """
 
 import re
@@ -61,57 +61,57 @@ def _numbers(text: str) -> set[str]:
     return set(_NUMBER.findall(text))
 
 
-def containment(response: str, source: str) -> float:
+def containment(output: str, context: str) -> float:
     """Precisión léxica: |R ∩ F| / |R|. Señal dominante del detector.
 
     Vale 0 si la respuesta no tiene palabras.
     """
-    R = _words(response)
+    R = _words(output)
     if not R:
         return 0.0
-    F = _words(source)
+    F = _words(context)
     return len(R & F) / len(R)
 
 
-def jaccard(response: str, source: str) -> float:
+def jaccard(output: str, context: str) -> float:
     """Solape simétrico: |R ∩ F| / |R ∪ F|. Vale 0 si ambos están vacíos."""
-    R = _words(response)
-    F = _words(source)
+    R = _words(output)
+    F = _words(context)
     union = R | F
     if not union:
         return 0.0
     return len(R & F) / len(union)
 
 
-def tfidf_cos(response: str, source: str) -> float:
+def tfidf_cos(output: str, context: str) -> float:
     """Coseno TF-IDF entre respuesta y fuente (Salton y Buckley, 1988).
 
     Ajusta el vocabulario solo con este par, así que no hay fuga entre
     muestras. Vale 0 si alguno no aporta términos.
     """
-    if not response.strip() or not source.strip():
+    if not output.strip() or not context.strip():
         return 0.0
     try:
-        X = TfidfVectorizer().fit_transform([response, source])
+        X = TfidfVectorizer().fit_transform([output, context])
     except ValueError:  # vocabulario vacío tras tokenizar
         return 0.0
     return float(cosine_similarity(X[0], X[1])[0, 0])
 
 
-def num_overlap(response: str, source: str) -> float:
+def num_overlap(output: str, context: str) -> float:
     """Fracción de números de la respuesta presentes en la fuente.
 
     Caza fechas y cifras inventadas. Vale 1 si la respuesta no tiene números
     (no hay ninguno que pueda estar sin respaldo).
     """
-    NR = _numbers(response)
+    NR = _numbers(output)
     if not NR:
         return 1.0
-    NF = _numbers(source)
+    NF = _numbers(context)
     return len(NR & NF) / len(NR)
 
 
-def novel_bigram(response: str, source: str) -> float:
+def novel_bigram(output: str, context: str) -> float:
     """Fracción de bigramas de la respuesta ausentes en la fuente.
 
     Caza la *recombinación*: palabras que sí están en la fuente pero unidas de
@@ -119,25 +119,25 @@ def novel_bigram(response: str, source: str) -> float:
     señal que el solape de unigramas —ciego al orden— no ve. Vale 0 si la
     respuesta no llega a dos tokens.
     """
-    RB = _ngrams(_seq(response), 2)
+    RB = _ngrams(_seq(output), 2)
     if not RB:
         return 0.0
-    return len(RB - _ngrams(_seq(source), 2)) / len(RB)
+    return len(RB - _ngrams(_seq(context), 2)) / len(RB)
 
 
-def novel_trigram(response: str, source: str) -> float:
+def novel_trigram(output: str, context: str) -> float:
     """Fracción de trigramas de la respuesta ausentes en la fuente.
 
     Versión más estricta de `novel_bigram`: exige tres palabras seguidas iguales.
     Vale 0 si la respuesta no llega a tres tokens.
     """
-    RT = _ngrams(_seq(response), 3)
+    RT = _ngrams(_seq(output), 3)
     if not RT:
         return 0.0
-    return len(RT - _ngrams(_seq(source), 3)) / len(RT)
+    return len(RT - _ngrams(_seq(context), 3)) / len(RT)
 
 
-def num_context(response: str, source: str) -> float:
+def num_context(output: str, context: str) -> float:
     """Fracción de números de la respuesta cuya unidad (token siguiente) está en la fuente.
 
     La unidad va tras el número ("26.2 miles", "55 years"). Mira el bigrama
@@ -146,32 +146,32 @@ def num_context(response: str, source: str) -> float:
     Un número al final de la respuesta no tiene unidad que contrastar y cuenta
     como anclado. Vale 1 si la respuesta no tiene números.
     """
-    seq = _seq(response)
+    seq = _seq(output)
     idx = [i for i, t in enumerate(seq) if _NUMBER.fullmatch(t)]
     if not idx:
         return 1.0
-    FB = _ngrams(_seq(source), 2)
+    FB = _ngrams(_seq(context), 2)
     anchored = sum(
         1 for i in idx if i + 1 >= len(seq) or (seq[i], seq[i + 1]) in FB
     )
     return anchored / len(idx)
 
 
-def neg_diff(response: str, source: str) -> float:
+def neg_diff(output: str, context: str) -> float:
     """Diferencia de densidad de negación entre respuesta y fuente.
 
     Una alucinación de conflicto suele invertir la polaridad ("did not attend"
     donde la fuente afirma). Positivo si la respuesta niega más que la fuente.
     """
-    rt, ft = _tokens(response), _tokens(source)
+    rt, ft = _tokens(output), _tokens(context)
     dr = sum(t in _NEGATIONS for t in rt) / len(rt) if rt else 0.0
     ds = sum(t in _NEGATIONS for t in ft) / len(ft) if ft else 0.0
     return dr - ds
 
 
-def answer_len(response: str, source: str) -> float:
+def answer_len(output: str, context: str) -> float:
     """Longitud de la respuesta en tokens (la fuente no interviene)."""
-    return float(len(_tokens(response)))
+    return float(len(_tokens(output)))
 
 
 # Orden canónico de las features escalares por par (respuesta, fuente).
@@ -198,7 +198,7 @@ SENTENCE_FEATURES = (
 )
 
 
-def _sentence_features(response: str, source: str) -> dict[str, float]:
+def _sentence_features(output: str, context: str) -> dict[str, float]:
     """Agrega el soporte de cada frase de la respuesta contra la fuente.
 
     La intuición: una alucinación suele ser *una* frase sin respaldo dentro de
@@ -217,14 +217,14 @@ def _sentence_features(response: str, source: str) -> dict[str, float]:
     neutral["sent_cont_min"] = neutral["sent_cont_mean"] = 1.0
     neutral["sent_sim_min"] = neutral["sent_sim_mean"] = 1.0
 
-    rs = _sentences(response)
+    rs = _sentences(output)
     if not rs:
         return neutral
 
-    F = _words(source)
+    F = _words(context)
     cont = np.array([len(w & F) / len(w) for s in rs if (w := _words(s))])
 
-    ss = _sentences(source)
+    ss = _sentences(context)
     if ss:
         try:
             V = TfidfVectorizer().fit(rs + ss)
@@ -245,7 +245,7 @@ def _sentence_features(response: str, source: str) -> dict[str, float]:
 
 
 def extract_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Construye la matriz de diseño a partir de (response, source[, task_type]).
+    """Construye la matriz de diseño a partir de (output, context[, task_type]).
 
     Tres bloques, alineados por índice:
     - las cinco features escalares de `FEATURES`;
@@ -253,10 +253,10 @@ def extract_features(df: pd.DataFrame) -> pd.DataFrame:
     - one-hot de `task_type` (`task_<QA|Summary|Data2txt>`) si la columna existe.
     """
     data = {
-        name: [f(r, s) for r, s in zip(df["response"], df["source"])]
+        name: [f(r, s) for r, s in zip(df["output"], df["context"])]
         for name, f in FEATURES.items()
     }
-    sent = [_sentence_features(r, s) for r, s in zip(df["response"], df["source"])]
+    sent = [_sentence_features(r, s) for r, s in zip(df["output"], df["context"])]
     for col in SENTENCE_FEATURES:
         data[col] = [row[col] for row in sent]
 

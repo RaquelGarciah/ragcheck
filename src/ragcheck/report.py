@@ -24,7 +24,7 @@ def model_report(name: str, gs: GridSearchCV, y: np.ndarray, y_prob: np.ndarray)
     path = REPORTS_DIR / f"{name}.md"
     lines = [
         f"# {name} — grid search y evaluación\n",
-        f"- Mejor F1 (CV GroupKFold por `source`): **{gs.best_score_:.3f}**",
+        f"- Mejor F1 (CV GroupKFold por `context`): **{gs.best_score_:.3f}**",
         f"- Mejores hiperparámetros: `{gs.best_params_}`\n",
         "## Rejilla de hiperparámetros (top-5 por F1)\n",
         top_configs(gs).round(4).to_markdown(index=False),

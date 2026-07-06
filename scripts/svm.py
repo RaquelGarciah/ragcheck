@@ -1,6 +1,6 @@
 """Entrena, ajusta (grid search) y evalúa la SVM de núcleo RBF sobre RAGTruth.
 
-Búsqueda en rejilla con GroupKFold por `source` maximizando F1, evaluación por
+Búsqueda en rejilla con GroupKFold por `context` maximizando F1, evaluación por
 secciones A–F del mejor modelo, y persistencia. Genera outputs/reports/svm.md.
 
 La rejilla se busca SIN `probability` (F1 usa `predict`, mucho más rápido); solo
@@ -51,7 +51,7 @@ def main() -> None:
     df = load_ragtruth("train")
     X = extract_features(df)
     y = df["label"].values
-    groups = df["source"].values
+    groups = df["context"].values
 
     gs = grid_search(_svm(probability=False), PARAM_GRID, X, y, groups)
     print(f"[{NAME}] mejor F1 (CV) = {gs.best_score_:.3f} con {gs.best_params_}")

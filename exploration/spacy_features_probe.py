@@ -48,18 +48,18 @@ def _feats(rr, sr):
 
 
 df = load_ragtruth("train")
-y = df["label"].values; groups = df["source"].values; tasks = df["task_type"].values
+y = df["label"].values; groups = df["context"].values; tasks = df["task_type"].values
 X = extract_features(df)
 
 t = time.time()
-uniq = list(set(df["response"]) | set(df["source"]))
+uniq = list(set(df["output"]) | set(df["context"]))
 reprs = {}
 for txt, doc in zip(uniq, nlp.pipe(uniq, batch_size=64)):
     reprs[txt] = _repr(doc)
 print(f"parseados {len(uniq)} textos únicos en {time.time()-t:.0f}s")
 
 dep, svo, binding = [], [], []
-for r, s in zip(df["response"], df["source"]):
+for r, s in zip(df["output"], df["context"]):
     d, v, b = _feats(reprs[r], reprs[s])
     dep.append(d); svo.append(v); binding.append(b)
 Xp = X.assign(dep_novelty=dep, svo_novelty=svo, ent_num_binding=binding)

@@ -1,6 +1,6 @@
 """Entrena, ajusta (grid search) y evalúa K vecinos más cercanos sobre RAGTruth.
 
-Búsqueda en rejilla con GroupKFold por `source` maximizando F1, evaluación por
+Búsqueda en rejilla con GroupKFold por `context` maximizando F1, evaluación por
 secciones A–F del mejor modelo, y persistencia. Genera outputs/reports/knn.md.
 El estimador incluye estandarizado previo (ver build_knn).
 """
@@ -38,7 +38,7 @@ def main() -> None:
     df = load_ragtruth("train")
     X = extract_features(df)
     y = df["label"].values
-    groups = df["source"].values
+    groups = df["context"].values
 
     gs = grid_search(build_knn(), PARAM_GRID, X, y, groups)
     print(f"[{NAME}] mejor F1 (CV) = {gs.best_score_:.3f} con {gs.best_params_}")

@@ -1,6 +1,6 @@
 """Entrenamiento y validación cruzada sin fuga de documento.
 
-La partición es `GroupKFold` agrupando por `source`: ninguna fuente aparece a
+La partición es `GroupKFold` agrupando por `context`: ninguna fuente aparece a
 la vez en train y test. TF-IDF y SVD, si se usan, se ajustan solo con train.
 """
 

@@ -1,6 +1,6 @@
 """Tablas de búsqueda en rejilla por modelo (estilo Sergio) sobre las 11 variables.
 
-Para cada modelo ejecuta grid search (GroupKFold por `source`, F1), captura TODAS las
+Para cada modelo ejecuta grid search (GroupKFold por `context`, F1), captura TODAS las
 combinaciones con su F1 de validación cruzada, refit del mejor y métricas en test. La
 rejilla de XGBoost se mantiene tal que su óptimo sigue siendo max_depth=6, lr=0.05
 (para no alterar al ganador ni las figuras aguas abajo). Escribe test_oficial_rfe.md
@@ -23,6 +23,7 @@ from ragcheck.data import load_ragtruth  # noqa: E402
 from ragcheck.features import extract_features  # noqa: E402
 from ragcheck.models import (  # noqa: E402
     build_knn, build_logreg, build_random_forest, build_svm, build_xgboost)
+from ragcheck.training import cross_validate  # noqa: E402
 from sklearn.model_selection import GridSearchCV, GroupKFold  # noqa: E402
 
 N_FOLDS = 6  # iteraciones de la validación cruzada en la búsqueda por rejilla
@@ -84,7 +85,7 @@ def grid_md(gs):
 def main():
     tr, te = load_ragtruth("train"), load_ragtruth("test")
     Xtr, Xte = extract_features(tr)[CHOSEN], extract_features(te)[CHOSEN]
-    ytr, yte, g = tr["label"].values, te["label"].values, tr["source"].values
+    ytr, yte, g = tr["label"].values, te["label"].values, tr["context"].values
     rng = np.random.default_rng(SEED)
     sub = rng.choice(len(ytr), 5000, replace=False)
 
@@ -95,13 +96,18 @@ def main():
                           cv=GroupKFold(n_splits=N_FOLDS)).fit(Xg, yg, groups=gg)
         grids_md[name] = grid_md(gs)
         best[name] = gs.best_params_
-        m = build().set_params(**gs.best_params_).fit(Xtr, ytr)
-        s = ev.summary(yte, m.predict_proba(Xte)[:, 1])
-        rows.append({"modelo": name, "AUC": round(s["auc_roc"], 3), "F1": round(s["f1"], 3),
-                     "precisión": round(s["precision"], 3), "recall": round(s["recall"], 3),
-                     "accuracy": round(s["accuracy"], 3), "bal_acc": round(s["balanced_accuracy"], 3),
-                     "prom_F1_AUC": round((s["f1"] + s["auc_roc"]) / 2, 3)})
-        print(f"[{name}] best={gs.best_params_} F1={s['f1']:.3f} AUC={s['auc_roc']:.3f}")
+        # Umbral honesto: Youden sobre las OOF de train completo (nunca sobre el test).
+        # La submuestra solo acelera la BÚSQUEDA de la SVM, no el umbral ni el modelo final.
+        p_oof = cross_validate(build().set_params(**gs.best_params_), Xtr, ytr, g)["y_prob"]
+        thr = ev.best_threshold(ytr, p_oof)
+        pte = build().set_params(**gs.best_params_).fit(Xtr, ytr).predict_proba(Xte)[:, 1]
+        d, tm = ev.discrimination(yte, pte), ev.threshold_metrics(yte, pte, thr)
+        bm = ev.balanced_metrics(yte, pte, thr)
+        rows.append({"modelo": name, "AUC": round(d["auc_roc"], 3), "F1": round(tm["f1"], 3),
+                     "precisión": round(tm["precision"], 3), "recall": round(tm["recall"], 3),
+                     "accuracy": round(tm["accuracy"], 3), "bal_acc": round(bm["balanced_accuracy"], 3),
+                     "prom_F1_AUC": round((tm["f1"] + d["auc_roc"]) / 2, 3)})
+        print(f"[{name}] best={gs.best_params_} thr={thr:.3f} F1={tm['f1']:.3f} AUC={d['auc_roc']:.3f}")
 
     tab = pd.DataFrame(rows).set_index("modelo").sort_values("prom_F1_AUC", ascending=False)
     winner = tab.index[0]
@@ -109,8 +115,9 @@ def main():
 
     with open(REPORTS_DIR / "test_oficial_rfe.md", "w") as f:
         f.write("# Evaluación en test oficial — conjunto RFE (11 variables)\n\n")
-        f.write(f"Variables: {', '.join(CHOSEN)}.\n\nGrid search GroupKFold por `source` "
-                "(F1); umbral por Youden. n test = 2700.\n\n")
+        f.write(f"Variables: {', '.join(CHOSEN)}.\n\nGrid search GroupKFold por `context` "
+                "(F1); umbral de Youden fijado sobre las OOF de train (no sobre test). "
+                "n test = 2700.\n\n")
         f.write("## Comparativa y ganador\n\n" + tab.to_markdown())
         f.write(f"\n\n**Ganador (promedio F1+AUC): {winner}.**\n\n")
         for name in GRIDS:

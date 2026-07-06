@@ -14,7 +14,7 @@ set_style()
 
 tr = load_ragtruth("train"); Xtr = extract_features(tr); ytr = tr["label"].values
 te = load_ragtruth("test");  Xte = extract_features(te); yte = te["label"].values
-groups = tr["source"].values
+groups = tr["context"].values
 
 # Ranking de features por importancia de permutación (xgb, en train).
 mdl = build_xgboost().fit(Xtr, ytr)

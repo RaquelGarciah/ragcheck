@@ -20,11 +20,11 @@ def load_model(name: str = DEFAULT_MODEL) -> BaseEstimator:
     return joblib.load(MODELS_DIR / f"{name}.joblib")
 
 
-def score(response: str, source: str) -> float:
-    """Probabilidad de que `response` contenga una alucinación respecto a `source`.
+def score(output: str, context: str) -> float:
+    """Probabilidad de que `output` contenga una alucinación respecto a `context`.
 
     Extrae las features del par y aplica el modelo por defecto. Devuelve un
     float en [0, 1].
     """
-    X = extract_features(pd.DataFrame({"response": [response], "source": [source]}))
+    X = extract_features(pd.DataFrame({"output": [output], "context": [context]}))
     return float(load_model().predict_proba(X)[0, 1])
