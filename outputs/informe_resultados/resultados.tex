@@ -661,8 +661,8 @@ Figura~\ref{fig:roc-all}.
 \subsubsection{Regresión logística}
 
 La regresión logística modela la probabilidad de alucinación aplicando la función sigmoide
-$\sigma(z)=1/(1+e^{-z})$ a una combinación lineal de las once características
-\cite{cox1958logreg}. Es el modelo más interpretable de todos, ya que cada coeficiente es el
+$\sigma(z)=1/(1+e^{-z})$ a una combinación lineal de las once características.
+Es el modelo más interpretable de todos, ya que cada coeficiente es el
 peso, con su signo, de una característica, y también el más barato de entrenar; su límite es
 que solo puede trazar fronteras de decisión lineales. Se ajustan tres hiperparámetros (con el
 solucionador fijado en \tc{liblinear}, que admite las dos penalizaciones):
@@ -904,7 +904,7 @@ AUC & 0,819 \\
 \subsubsection{Bosque aleatorio}
 
 El bosque aleatorio promedia el voto de muchos árboles de decisión, cada uno entrenado sobre
-una submuestra distinta de los datos y de las características \cite{breiman2001rf}. Es robusto,
+una submuestra distinta de los datos y de las características. Es robusto,
 capta interacciones entre características y es insensible a la escala, a cambio de perder la
 interpretabilidad de un árbol único. Se fija el número de árboles en $300$, suficiente para
 que el promedio se estabilice, y se ajustan tres hiperparámetros:
