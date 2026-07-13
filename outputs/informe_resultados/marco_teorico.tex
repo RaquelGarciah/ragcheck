@@ -28,6 +28,7 @@
 
 \theoremstyle{definition}
 \newtheorem{definicion}{Definición}
+\newtheorem{teorema}{Teorema}
 
 \setlist[itemize]{itemsep=2pt,topsep=3pt,parsep=0pt}
 
@@ -37,28 +38,476 @@
 
 \chapter{Marco teórico}
 
-Este capítulo reúne los fundamentos que sostienen el detector del capítulo siguiente: cómo se
-convierte un texto en números, qué modelos clasifican esos números, cómo se validan y con qué
-métricas se miden. Cada concepto se presenta una vez y en su forma general; su aplicación concreta,
-con los datos y las cifras del problema, se desarrolla en el caso práctico.
+El propósito de este capítulo es reunir los fundamentos que sostienen el detector construido en el
+caso práctico: cómo se convierte un texto en números, qué modelos clasifican esos números, cómo se
+validan sin engañarse y con qué métricas se comparan. Cada concepto aparece una sola vez y en su forma
+general; su aplicación concreta, con los datos, las variables y las cifras del problema, se reserva para
+el capítulo siguiente.
 
 % ###########################################################################
-\section{Aprendizaje automático}
+\section{Text mining}
+\label{sec:textmining}
+
+El dato de partida es texto, pero los clasificadores que usaremos operan sobre vectores de números
+reales. La minería de textos (\emph{text mining}) \cite{aggarwal2012textmining} es el conjunto de
+técnicas que salva esa distancia: transforma un texto en una representación numérica sobre la que un
+modelo pueda calcular. Reunimos aquí las tres piezas que necesita el detector: trocear el texto en
+unidades (tokenización), pesar cada unidad según lo informativa que sea (ponderación TF-IDF) y, con esa
+representación, medir cuánto se parecen dos textos (medidas de similitud). El vocabulario de esta
+sección es el que emplea el capítulo práctico para construir las variables a partir de cada respuesta y
+su fuente.
+
+\paragraph{Tokenización y normalización.} El primer paso rompe el texto en unidades mínimas llamadas
+\emph{tokens}. Una tokenización simple pasa el texto a minúsculas y extrae las secuencias
+alfanuméricas maximales, de modo que ``WiFi'' y ``wifi'' cuenten como la misma palabra y los signos de
+puntuación se descarten. La frase ``El hotel tiene WiFi gratis.'' produce entonces los cinco tokens
+$\langle$el, hotel, tiene, wifi, gratis$\rangle$. Sobre esa secuencia se definen los \emph{$n$-gramas}:
+grupos de $n$ tokens consecutivos. Un unigrama es una palabra suelta; un bigrama, dos seguidas
+(``wifi gratis''); un trigrama, tres. Los $n$-gramas retienen combinaciones que la palabra aislada
+pierde: ``no funciona'' dice lo contrario que ``funciona'', y solo el bigrama lo captura. Esa ganancia
+tiene un precio, cada nivel de $n$-grama multiplica el tamaño del vocabulario, así que en la práctica
+se limita a unigramas y bigramas.
+
+Dos técnicas reducen las variantes de una palabra a una forma común, para no tratar ``jugar'' y
+``jugando'' como términos distintos. El \emph{stemming} recorta la palabra a su raíz mediante reglas
+(``jugando'', ``jugador'' $\to$ ``jug''); la \emph{lematización} la lleva a su forma de diccionario
+usando su categoría gramatical (``jugando'' $\to$ ``jugar''), lo que es más preciso y más costoso. En
+este trabajo la tokenización se mantiene simple, sin stemming ni lematización, porque la señal que
+buscamos vive en el solape literal de palabras entre respuesta y fuente, y normalizar las formas la
+difuminaría.
+
+\paragraph{Bolsa de palabras y TF-IDF.} La representación más básica de un texto es la \emph{bolsa de
+palabras}~\cite{harris1954distributional}: se fija un vocabulario de $V$ términos, uno por cada palabra
+distinta de la colección, y cada texto se convierte en un vector de $\mathbb{R}^V$ que cuenta cuántas
+veces aparece cada término, sin atender al orden en que salen. Con los documentos ``free wifi hotel'',
+``wifi hotel breakfast'' y ``cheap hotel'', el vocabulario tiene cinco términos y cada documento es una
+fila de la matriz de frecuencias:
+
+\begin{center}
+\begin{tabular}{lccccc}
+\toprule
+ & free & wifi & hotel & breakfast & cheap \\
+\midrule
+$d_1$: free wifi hotel      & 1 & 1 & 1 & 0 & 0 \\
+$d_2$: wifi hotel breakfast & 0 & 1 & 1 & 1 & 0 \\
+$d_3$: cheap hotel          & 0 & 0 & 1 & 0 & 1 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent El defecto de esta representación es dar el mismo peso a una palabra vacía muy repetida
+(``de'', ``el'') que a un término informativo raro. El esquema \textbf{TF-IDF} (\emph{term
+frequency--inverse document frequency}) corrige ese sesgo ponderando cada término por su rareza en la
+colección \cite{salton1988tfidf}: pesa mucho lo específico y poco lo frecuente. Sea una colección de
+$N$ documentos; para un término $t$, denotamos por $\mathrm{tf}(t,d)$ el número de veces que $t$
+aparece en el documento $d$ y por $\mathrm{df}(t)$ el número de documentos que contienen $t$. El peso
+de $t$ en $d$ es el producto de dos factores,
+\begin{equation}
+w_{t,d} \;=\; \underbrace{\mathrm{tf}(t,d)}_{\text{frecuencia en el documento}}\;\cdot\;
+\underbrace{\log\frac{N}{\mathrm{df}(t)}}_{\text{rareza en la colección}}.
+\label{eq:tfidf}
+\end{equation}
+El primer factor, la frecuencia de término, sube con las veces que $t$ aparece en el documento; el
+segundo, la frecuencia inversa de documento, lo penaliza si además aparece en muchos documentos. La
+intuición del segundo factor es una medida de sorpresa: un término presente en casi todos los
+documentos tiene $\mathrm{df}(t)\approx N$, su logaritmo tiende a cero y su peso se anula, porque
+verlo no informa; uno raro tiene $\mathrm{df}(t)$ pequeño y su logaritmo crece. Sobre el ejemplo
+anterior, con $N=3$ y tomando logaritmo natural, el factor de rareza es:
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+término & $\mathrm{df}(t)$ & $\ln(N/\mathrm{df}(t))$ \\
+\midrule
+hotel                  & 3 & $\ln(3/3)=0$ \\
+wifi                   & 2 & $\ln(3/2)\approx 0{,}41$ \\
+free, breakfast, cheap & 1 & $\ln(3/1)\approx 1{,}10$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+La palabra ``hotel'', presente en los tres documentos, recibe peso cero: es común y no distingue nada.
+Las que solo salen en uno pesan lo máximo, porque son las que lo caracterizan frente al resto. Así, la
+fila de $d_1$ en TF-IDF deja de ser $(1,1,1,0,0)$ y pasa a $(1{,}10,\,0{,}41,\,0,\,0,\,0)$: ``free''
+manda, ``hotel'' desaparece.
+
+\paragraph{Similitud entre dos textos.} La señal central del detector es cuánto se apoya una respuesta
+en su fuente: una respuesta cuyas palabras están casi todas respaldadas por la fuente es fiable,
+mientras que una que introduce términos ajenos a ella levanta la sospecha de invención. Para
+cuantificarlo representamos cada texto por su conjunto de palabras únicas.
+
+\begin{definicion}[Conjuntos de palabras de la respuesta y la fuente]
+Dada una respuesta y su fuente, sea $R$ el conjunto de palabras únicas de la respuesta y $F$ el
+conjunto de palabras únicas de la fuente. $|R|$ y $|F|$ son sus cardinales, $R\cap F$ las palabras
+comunes y $R\cup F$ el total de palabras distintas entre las dos.
+\end{definicion}
+
+\noindent Sobre $R$ y $F$ se definen tres medidas de solape con lecturas distintas:
+\begin{equation}
+\mathrm{containment} = \frac{|R\cap F|}{|R|},\qquad
+\mathrm{Jaccard} = \frac{|R\cap F|}{|R\cup F|},\qquad
+\cos(u,v) = \frac{\langle u,v\rangle}{\lVert u\rVert\,\lVert v\rVert}.
+\label{eq:solapes}
+\end{equation}
+El \textbf{containment} es la fracción de palabras de la respuesta que también están en la fuente; mira
+solo hacia la respuesta, así que no penaliza que la fuente sea larga. El \textbf{índice de Jaccard} es
+el solape simétrico, normalizado por la unión, y sí baja cuando los textos difieren mucho en tamaño. El
+\textbf{coseno TF-IDF} no trabaja sobre conjuntos, sino sobre los vectores TF-IDF $u$ y $v$ de ambos
+textos, y mide el coseno del ángulo que forman (Figura~\ref{fig:coseno}) a partir de su producto
+escalar $\langle u,v\rangle$ y sus normas: vale $1$ cuando apuntan en la misma dirección, $0$ cuando
+son perpendiculares, y pondera cada palabra por su rareza, de modo que coincidir en un término raro
+cuenta más que coincidir en uno común. Con $R=\{$free, wifi, indian$\}$ y $F=\{$wifi, indian, vegan$\}$
+la intersección tiene dos palabras y la unión cuatro, luego el containment es
+$|R\cap F|/|R|=2/3\approx0{,}67$ y el Jaccard $|R\cap F|/|R\cup F|=2/4=0{,}50$. El containment queda por
+encima porque ignora la palabra ``vegan'', presente solo en la fuente; el Jaccard sí la cuenta en el
+denominador de la unión y por eso baja.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.05]
+\draw[->] (0,0)--(3.4,0) node[right,font=\footnotesize]{};
+\draw[->] (0,0)--(0,3.0) node[above,font=\footnotesize]{};
+\draw[very thick,blue,-{Stealth}] (0,0)--(2.9,1.0) node[right,font=\small]{$u$};
+\draw[very thick,red,-{Stealth}] (0,0)--(1.4,2.6) node[above,font=\small]{$v$};
+\draw (0.55,0.19) arc (19:62:0.6);
+\node[font=\footnotesize] at (0.95,0.72) {$\theta$};
+\end{tikzpicture}
+\caption{El coseno mide la similitud por el ángulo $\theta$ entre los vectores de dos textos, no por su
+longitud: dos textos con las mismas proporciones de palabras apuntan en la misma dirección.}
+\label{fig:coseno}
+\end{figure}
+
+\noindent El containment cae cuando la respuesta introduce palabras nuevas, ausentes de la fuente, que
+es la huella de una invención léxica: es la medida que más nos interesa, porque captura directamente el
+anclaje de la respuesta en su fuente.
+
+\paragraph{Representación semántica.} El solape de palabras no capta sinónimos ni paráfrasis: ``coche''
+y ``automóvil'' cuentan como términos sin relación, aunque signifiquen lo mismo. Una representación que
+sí los acerca, sin recurrir a redes neuronales, es el \emph{análisis semántico latente} (LSA)
+\cite{deerwester1990lsa}. Parte de la matriz TF-IDF $M\in\mathbb{R}^{N\times V}$, con una fila por
+documento y una columna por término, y le aplica una descomposición en valores singulares truncada a
+$k$ componentes,
+\begin{equation}
+M \;\approx\; U_k\,\Sigma_k\,V_k^{\top},
+\label{eq:lsa}
+\end{equation}
+donde $\Sigma_k$ es la matriz diagonal de los $k$ mayores valores singulares y las columnas de $U_k$ y
+$V_k$ son los vectores singulares asociados. Esos $k$ ejes concentran la mayor variación de la matriz;
+proyectar los textos sobre ellos, $M\,V_k$, los lleva a un espacio de $k$ dimensiones donde los
+términos que suelen aparecer juntos quedan cerca, de modo que dos textos que comparten temática
+resultan próximos aunque no compartan las mismas palabras. Con $V$ grande, calcular la factorización
+exacta es caro, y en la práctica se usa un algoritmo aleatorizado que la aproxima con un coste mucho
+menor \cite{halko2011svd}. Es la única representación semántica que usamos, coherente con un enfoque
+clásico y barato.
+
+% ###########################################################################
+\section{Metodología}
+\label{sec:metodologia}
+
+Un proyecto de modelización analítica sigue un flujo ordenado de fases. Adoptamos la metodología
+\textbf{SEMMA} \cite{azevedo2008semma}, propuesta por SAS, que organiza el proceso de minería de datos
+en cinco fases (Figura~\ref{fig:semma}): exploración, muestreo, modificación, modelización y
+valoración. Es una organización lógica de las tareas del análisis, hermana de la metodología CRISP-DM
+\cite{wirth2000crispdm}, y estructura tanto este capítulo como su aplicación en el práctico. Cada fase
+cumple un papel:
+
+\begin{itemize}
+\item \textbf{Exploración} (\emph{Explore}): describir los datos, sus distribuciones, la prevalencia de
+cada clase y las relaciones entre variables.
+\item \textbf{Muestreo} (\emph{Sample}): fijar los conjuntos de entrenamiento, validación y test, y
+equilibrar las clases si el reparto es muy desigual.
+\item \textbf{Modificación} (\emph{Modify}): depurar y preparar las variables (valores ausentes,
+atípicos) y seleccionar las informativas.
+\item \textbf{Modelización} (\emph{Model}): ajustar los modelos y sus hiperparámetros.
+\item \textbf{Valoración} (\emph{Assess}): medir el rendimiento de los modelos ajustados con métricas.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  fase/.style={rectangle, rounded corners, draw, align=center, minimum height=1.05cm,
+               text width=2.25cm, font=\small, fill=blue!6}]
+\node[fase](e){Exploración\\\emph{(Explore)}};
+\node[fase, right=0.45cm of e](s){Muestreo\\\emph{(Sample)}};
+\node[fase, right=0.45cm of s](m){Modificación\\\emph{(Modify)}};
+\node[fase, right=0.45cm of m](o){Modelización\\\emph{(Model)}};
+\node[fase, right=0.45cm of o](a){Valoración\\\emph{(Assess)}};
+\draw[-{Stealth}](e)--(s); \draw[-{Stealth}](s)--(m);
+\draw[-{Stealth}](m)--(o); \draw[-{Stealth}](o)--(a);
+\end{tikzpicture}
+\caption{Las cinco fases de la metodología SEMMA, en el orden en que se aplican al problema.}
+\label{fig:semma}
+\end{figure}
+
+\noindent Las cinco fases se desarrollan a continuación.
+
+\subsection{Análisis exploratorio}
+
+
+Antes de modelar hay que mirar los datos. El \textbf{análisis descriptivo} caracteriza cada variable y
+la etiqueta: su distribución, su rango, sus valores atípicos y las relaciones que guardan entre sí y
+con la clase. De ese examen salen las decisiones de las fases siguientes y afloran los problemas que
+condicionan el resto del trabajo. El más determinante en clasificación es el \textbf{desbalance} entre
+clases. La \emph{prevalencia} de una clase es la fracción de ejemplos que le pertenecen; cuando una
+clase es mucho menos frecuente que la otra, el aprendizaje se sesga hacia la mayoritaria, y un modelo
+que se limite a predecirla siempre acierta en apariencia sin detectar un solo caso de la minoritaria.
+Si una clase supone el $90\,\%$ de los ejemplos, contestar siempre ``mayoritaria'' logra un $90\,\%$ de
+aciertos y cero utilidad. Reconocer el desbalance a tiempo orienta las tres decisiones posteriores: el
+muestreo con que se equilibra la base, el umbral con que se decide y las métricas con que se juzga, las
+tres cuestiones que retoman las subsecciones siguientes.
+
+\subsection{Muestreo}
+
+
+Cuando el reparto entre clases es muy desigual, el entrenamiento tiende a sesgarse hacia la mayoritaria.
+El \textbf{remuestreo} reequilibra la base antes de entrenar de dos formas: el \emph{sobremuestreo}
+(\emph{oversampling}) replica o sintetiza ejemplos de la clase minoritaria (SMOTE los interpola entre
+vecinos cercanos~\cite{chawla2002smote}) y el \emph{submuestreo} (\emph{undersampling}) descarta
+ejemplos de la mayoritaria. El remuestreo no es la única palanca frente al desbalance: el umbral de
+decisión, que fijamos en la validación, ajusta el compromiso entre clases sin tocar los datos.
+
+\subsection{Manipulación de datos}
+
+La fase de \textbf{modificación} prepara las variables antes de modelar. Depura los datos (imputa los
+valores ausentes, o \emph{missing}, con un valor plausible y acota los atípicos, o \emph{outliers}, que
+distorsionan sobre todo a los modelos lineales) y reduce la dimensión quedándose con las variables
+informativas. La construcción de las variables a partir del texto, la ingeniería de características, se
+describe en el capítulo práctico; aquí tratamos la teoría de la selección de variables.
+
+\paragraph{Selección de características.} Con muchas variables conviene quedarse con las informativas y
+descartar las redundantes, tanto para mejorar el modelo como para entenderlo \cite{guyon2003selection}.
+Hay dos familias. Los métodos de \textbf{filtro} puntúan cada variable por una medida estadística de su
+relación con la etiqueta, al margen del modelo; son rápidos, pero ignoran las interacciones y la
+redundancia entre variables, así que pueden quedarse con dos variables casi idénticas. Los métodos
+\textbf{envolventes} (\emph{wrapper}) usan el propio modelo como juez: prueban subconjuntos y se quedan
+con el que mejor valida, a mayor coste. La \textbf{eliminación recursiva de características} (RFE) es el
+envolvente que usamos \cite{guyon2002rfe}: entrena con todas las variables, elimina la menos
+importante, reentrena y repite, lo que produce un orden de importancia. El número final de variables se
+fija por el \emph{método del codo}, el punto de la curva de rendimiento a partir del cual añadir
+variables ya no aporta.
+
+\subsection{Modelización}
+
+Entrenar un clasificador es ajustar sus \emph{parámetros} para que reproduzca las etiquetas del
+entrenamiento, minimizando una función de pérdida. Los modelos concretos que entrenamos se desarrollan
+más adelante, en la sección de modelos; queda antes un paso común a todos: fijar sus
+\emph{hiperparámetros}, las opciones que no se aprenden de los datos (la profundidad de un árbol, el
+número de vecinos) y que hay que decidir de antemano.
+
+\paragraph{Validación cruzada.} Medir el rendimiento sobre los mismos datos con que se entrena infla el
+resultado, porque el modelo ya los conoce. Reservar una parte para test lo evita, pero entonces el
+resultado depende de qué ejemplos tocaron en esa partición. La \textbf{validación cruzada} de $k$
+iteraciones elimina esa dependencia~\cite{stone1974crossval}: parte el entrenamiento en $k$ bloques, entrena con $k-1$ y valida con el restante, y
+repite rotando el bloque de validación (Figura~\ref{fig:groupkfold}); el rendimiento final es el
+promedio de las $k$ rondas, que ya no depende de una partición afortunada.
+
+Esta partición debe respetar la estructura de los datos. Cuando varios ejemplos comparten una misma
+unidad, aquí un mismo documento fuente del que salen varias respuestas, esa unidad tiene que caer
+entera en un solo bloque. Si no, el modelo ve en validación una respuesta casi idéntica a otra que tuvo
+en entrenamiento y el resultado se infla por esa filtración. La variante que lo garantiza es el
+\textbf{GroupKFold}, que agrupa por la unidad e impide que un documento aparezca a la vez en
+entrenamiento y validación.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.62\textwidth]{concept_groupkfold}
+\caption{GroupKFold por documento: cada fuente cae entera en un único bloque, de modo que ninguna
+aparece a la vez en entrenamiento (azul) y validación (naranja).}
+\label{fig:groupkfold}
+\end{figure}
+
+\paragraph{Búsqueda en rejilla.} Casi todos los modelos tienen hiperparámetros, y distintas
+combinaciones dan resultados distintos: no es lo mismo tomar los $3$ vecinos más cercanos con distancia
+euclídea que los $11$ con distancia de Manhattan. La \textbf{búsqueda en rejilla} (\emph{grid search})
+los ajusta probando un conjunto de combinaciones, evaluando cada una por validación cruzada y
+conservando la mejor, sin tocar el test (Figura~\ref{fig:gridsearch}). Su coste crece con el producto
+de los valores de cada hiperparámetro por las iteraciones de la validación: optimizar tres
+hiperparámetros con tres valores cada uno y validación cruzada de cuatro iteraciones ya son
+$3\cdot3\cdot3\cdot4=108$ ajustes. Para modelos clásicos ese coste es asumible en un ordenador
+corriente.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.5\textwidth]{concept_gridsearch}
+\caption{Búsqueda en rejilla: cada celda es el rendimiento medio de una combinación de hiperparámetros
+en validación cruzada; se conserva la mejor.}
+\label{fig:gridsearch}
+\end{figure}
+
+\subsection{Valoración}
+
+La fase de \textbf{valoración} mide el rendimiento de los modelos ajustados. Necesita un lenguaje de
+métricas que cuantifique el acierto y distinga los tipos de error.
+
+
+Evaluar un clasificador binario empieza por contar sus aciertos y errores. Tomando como clase positiva
+la que interesa detectar (aquí, la alucinación), cada predicción cae en una de cuatro casillas: los
+verdaderos positivos (VP) y verdaderos negativos (VN) son aciertos; los falsos positivos (FP, error de
+tipo I) y falsos negativos (FN, error de tipo II) son los dos tipos de fallo. Su recuento se organiza
+en la \emph{matriz de confusión} (Figura~\ref{fig:confusion}).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.5\textwidth]{concept_matriz_confusion}
+\caption{Matriz de confusión. El falso negativo (tipo II) es un positivo real que se predice negativo;
+el falso positivo (tipo I), un negativo que se predice positivo.}
+\label{fig:confusion}
+\end{figure}
+
+Los dos errores rara vez cuestan lo mismo: en un diagnóstico médico, un falso negativo deja sin tratar
+a un enfermo, mientras que un falso positivo trata a un sano. En nuestro caso el falso negativo, una
+alucinación que se cuela, es el error caro, y las métricas siguientes permiten primar su detección.
+
+Sobre los cuatro conteos se definen las dos medidas básicas. La \textbf{precisión} indica cuántas de
+las predicciones positivas fueron correctas, es decir, cómo de fiable es el modelo cuando marca algo
+como positivo. El \textbf{\emph{recall}} (también exhaustividad o sensibilidad) indica cuántos de los
+positivos reales llegó a detectar:
+\begin{equation}
+\mathrm{precisión} = \frac{VP}{VP+FP},\qquad
+\mathrm{recall} = \frac{VP}{VP+FN}.
+\label{eq:precrec}
+\end{equation}
+Precisión y recall se mueven en sentidos opuestos, y el equilibrio lo fija el umbral de decisión. Si el
+modelo solo predice positivo cuando está muy seguro, acierta casi siempre que lo hace (precisión alta),
+pero deja escapar muchos positivos dudosos (recall bajo). Si predice positivo a la mínima, no se le
+escapa casi ninguno (recall alto) a costa de muchas falsas alarmas (precisión baja). En el extremo, un
+modelo que marca todo como positivo tiene recall $1$ y precisión igual a la simple proporción de
+positivos.
+
+Resumir precisión y recall en un solo número exige combinarlos de forma que ninguno pueda salvarse a
+costa del otro. La media aritmética no sirve: valdría $0{,}5$ para un modelo con precisión $1$ y recall
+$0$, que no detecta nada. La media armónica sí penaliza ese desequilibrio.
+
+\begin{definicion}[Media armónica]
+La \emph{media armónica} de dos números positivos $a$ y $b$ es
+\[
+H(a,b) \;=\; \frac{2}{\tfrac{1}{a}+\tfrac{1}{b}} \;=\; \frac{2ab}{a+b}.
+\]
+Está siempre dominada por la media aritmética, se acerca al menor de los dos valores y tiende a cero
+en cuanto uno de ellos lo hace.
+\end{definicion}
+
+\noindent El valor \textbf{F1} es la media armónica de precisión y recall, y solo es alto cuando los
+dos lo son:
+\begin{equation}
+F_1 = H(\mathrm{precisión},\mathrm{recall})
+    = 2\,\frac{\mathrm{precisión}\cdot\mathrm{recall}}{\mathrm{precisión}+\mathrm{recall}}.
+\label{eq:f1}
+\end{equation}
+El F1 supone que precisión y recall importan igual, lo que no siempre ocurre. Cuando detectar
+positivos pesa más que evitar falsas alarmas, se usa su generalización $F_\beta$, que valora el recall
+$\beta^2$ veces más que la precisión:
+\begin{equation}
+F_\beta = (1+\beta^2)\,\frac{\mathrm{precisión}\cdot\mathrm{recall}}
+{\beta^2\,\mathrm{precisión}+\mathrm{recall}}.
+\label{eq:fbeta}
+\end{equation}
+El caso $\beta=2$, denotado $F_2$, pesa el recall cuatro veces más que la precisión, y conviene cuando
+el falso negativo es el error caro, como en la detección de alucinaciones.
+
+Una medida más intuitiva, la \textbf{accuracy} o fracción de aciertos,
+$\tfrac{VP+VN}{VP+VN+FP+FN}$, engaña cuando una clase domina: si el $90\,\%$ de los ejemplos son
+negativos, predecir siempre negativo ya da un $90\,\%$ de accuracy sin detectar un solo positivo. La
+\textbf{balanced accuracy} corrige ese espejismo promediando el recall de cada clase. Un ejemplo lo
+fija: sobre $300$ respuestas con $100$ alucinaciones reales, un detector caza $70$ ($VP=70$, $FN=30$) a
+costa de $20$ falsas alarmas ($FP=20$, $VN=180$). Su precisión es $70/90\approx0{,}78$, el recall
+$70/100=0{,}70$ y el $F_1\approx0{,}74$; la accuracy sube a $(70+180)/300\approx0{,}83$ porque acierta
+casi todos los negativos, que son mayoría, mientras que la balanced accuracy,
+$\tfrac12(0{,}70+0{,}90)=0{,}80$, rebaja esa cifra optimista.
+
+Todas las métricas anteriores dependen del umbral con que la probabilidad se convierte en decisión.
+Dos curvas recorren todos los umbrales de golpe. La \textbf{curva ROC} (Figura~\ref{fig:curvas},
+izquierda) contrapone la tasa de verdaderos positivos (el recall) frente a la tasa de falsos positivos
+al variar el umbral \cite{fawcett2006roc}; su área bajo la curva es el \textbf{AUC}. El AUC admite dos
+lecturas equivalentes, una geométrica y otra probabilística, que el teorema siguiente enuncia.
+
+\begin{teorema}[Área bajo la curva ROC]
+Sea $s(x)$ la puntuación que el clasificador asigna a un ejemplo $x$, y sean $X^{+}$ y $X^{-}$ un
+positivo y un negativo tomados al azar de forma independiente. El área bajo la curva ROC coincide con
+la probabilidad de que el positivo puntúe por encima del negativo:
+\[
+\mathrm{AUC} \;=\; \int_0^1 \mathrm{TVP}\big(\mathrm{TFP}\big)\,\mathrm{d}(\mathrm{TFP})
+\;=\; \mathbb{P}\!\left(s(X^{+}) > s(X^{-})\right),
+\]
+con el convenio de contar como $\tfrac12$ los empates $s(X^{+})=s(X^{-})$.
+\end{teorema}
+
+\noindent La primera igualdad es la definición geométrica, el área bajo la curva; la segunda es su
+lectura probabilística~\cite{hanley1982roc}. El AUC tiene dos propiedades que lo hacen una medida sólida para comparar modelos: es
+invariante a la escala del score, pues solo importa el orden de las predicciones, y es invariante al
+umbral, pues los resume todos. La \textbf{curva precisión--recall} (Figura~\ref{fig:curvas}, derecha),
+en cambio, sí refleja el desbalance de clases, porque la precisión depende de la proporción de
+positivos; un modelo bueno mantiene la precisión alta aun a recall alto, y su curva se acerca a la
+esquina superior derecha. Por eso la miramos además del AUC cuando la clase positiva es minoritaria.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.9]
+\draw[->] (0,0)--(1.12,0) node[right,font=\footnotesize]{tasa de FP};
+\draw[->] (0,0)--(0,1.12) node[above,font=\footnotesize]{tasa de VP};
+\draw[dashed] (0,0)--(1,1) node[pos=0.6,below right,font=\footnotesize]{azar};
+\draw[very thick,blue] (0,0) .. controls (0.05,0.6) and (0.25,0.95) .. (1,1);
+\node[font=\footnotesize] at (0.58,0.4) {AUC};
+\node[font=\small] at (0.5,-0.28) {(a) curva ROC};
+\begin{scope}[xshift=3.4cm]
+\draw[->] (0,0)--(1.12,0) node[right,font=\footnotesize]{recall};
+\draw[->] (0,0)--(0,1.12) node[above,font=\footnotesize]{precisión};
+\draw[very thick,blue] (0,0.97) .. controls (0.6,0.95) and (0.8,0.85) .. (1,0.35);
+\node[font=\small] at (0.5,-0.28) {(b) curva precisión--recall};
+\end{scope}
+\end{tikzpicture}
+\caption{Las dos curvas que recorren todos los umbrales. La ROC resume la separación en el AUC; la
+precisión--recall muestra a partir de qué recall se degrada la precisión.}
+\label{fig:curvas}
+\end{figure}
+
+Elegido un modelo, queda fijar el umbral $t$ que decide positivo cuando el score supera $t$. El
+\textbf{índice de Youden} elige el que maximiza $J = \text{sensibilidad} + \text{especificidad} - 1$,
+esto es, el punto de la curva ROC más alejado de la diagonal, donde mejor se separan las dos
+clases~\cite{youden1950index}.
+
+\paragraph{Umbral de decisión.} El clasificador devuelve una probabilidad, y convertirla en
+una decisión exige fijar un \textbf{umbral} de corte. El índice de Youden da un umbral que separa bien
+las dos clases en promedio, pero no es la única opción: bajar el umbral gana recall a costa de
+precisión, y subirlo hace lo contrario. Cuando la prevalencia cambia entre grupos, un umbral distinto
+por grupo aprovecha esa diferencia. El umbral es así la segunda palanca frente al desbalance, junto al
+remuestreo.
+
+% ###########################################################################
+\section{Fundamentos de los modelos utilizados}
+\label{sec:modelos}
+
+Esta sección reúne los fundamentos de los cinco clasificadores del caso práctico. Empezamos por los
+conceptos generales del aprendizaje automático y desarrollamos después cada modelo con su intuición, su
+formulación y sus ventajas y límites.
+
+\subsection{Introducción al aprendizaje automático}
+\label{sec:intro-ml}
+
 
 Un modelo de aprendizaje automático es un programa que aprende a reconocer patrones a partir de
-ejemplos. En lugar de escribir a mano las reglas de decisión, algo inviable cuando el fenómeno es
-complejo, se le muestra un conjunto de datos ya resueltos y el modelo ajusta sus parámetros para
-reproducirlos; hecho esto, sabe responder ante datos nuevos que no había visto. Cuando los ejemplos
-vienen etiquetados con la respuesta correcta, el aprendizaje es \emph{supervisado}, y es el que usamos
-aquí. La alternativa, el aprendizaje \emph{no supervisado}, trabaja sin etiquetas y busca agrupar los
-datos por semejanza, pero queda fuera de este trabajo.
+ejemplos~\cite{mitchell1997ml}. En lugar de escribir a mano las reglas de decisión, algo inviable
+cuando el fenómeno es complejo, se le muestra un conjunto de datos ya resueltos y ajusta sus
+parámetros para reproducirlos; hecho esto, sabe responder ante datos nuevos que no había visto. Según
+lo que se conozca de los ejemplos, se distinguen dos grandes tipos de aprendizaje:
 
-Dentro del aprendizaje supervisado se distinguen dos tareas según la respuesta buscada. En
-\textbf{regresión} la respuesta es un número continuo: cuánto tardará un trayecto, qué precio tendrá
-una vivienda. En \textbf{clasificación} la respuesta es una categoría de un conjunto finito, y cuando
-ese conjunto tiene solo dos valores se habla de \textbf{clasificación binaria}: decidir si un correo
-es spam o no, si un paciente está enfermo o sano. La Figura~\ref{fig:clasvsreg} contrasta ambas.
-Nuestro problema es de clasificación binaria: decidir si una respuesta contiene una alucinación o no.
+\begin{itemize}
+\item \textbf{Supervisado.} Los ejemplos vienen etiquetados con la respuesta correcta y el modelo
+aprende a predecirla. Es el que usamos aquí.
+\item \textbf{No supervisado.} No hay etiqueta; el modelo agrupa los datos por semejanza. Queda fuera
+de este trabajo.
+\end{itemize}
+
+Dentro del aprendizaje supervisado, la naturaleza de la respuesta separa dos tareas:
+
+\begin{itemize}
+\item \textbf{Regresión.} La respuesta es un número continuo, como el tiempo de un trayecto o el
+precio de una vivienda.
+\item \textbf{Clasificación.} La respuesta es una categoría de un conjunto finito; cuando solo hay dos
+valores se habla de \textbf{clasificación binaria}, como decidir si un correo es spam o si un paciente
+está enfermo.
+\end{itemize}
+
+La Figura~\ref{fig:clasvsreg} contrasta ambas. Nuestro problema es de clasificación binaria: decidir
+si una respuesta contiene una alucinación o no.
 
 \begin{figure}[H]
 \centering
@@ -89,16 +538,30 @@ regresión la salida es continua y el modelo busca la tendencia.}
 \label{fig:clasvsreg}
 \end{figure}
 
-\begin{definicion}
-Cada ejemplo se describe por un vector de \emph{características} $x=(x_1,\dots,x_d)\in\mathbb{R}^d$, y
-lleva una \emph{etiqueta} o clase $y$. En clasificación binaria, $y\in\{0,1\}$.
+Antes de fijar el objetivo del aprendizaje conviene nombrar los objetos con que trabaja. Cada ejemplo
+de la base de datos se describe por unas medidas y lleva asociada una respuesta; las medidas son las
+\emph{características} y la respuesta es la \emph{clase}.
+
+\begin{definicion}[Característica y vector de características]
+Una \emph{característica} es cada una de las magnitudes que se miden de un ejemplo y de las que puede
+depender su respuesta; se corresponde con una columna de la base de datos. El \emph{vector de
+características} de un ejemplo reúne todas ellas, $x=(x_1,\dots,x_d)\in\mathbb{R}^d$, y $d$ es el
+número de características.
+\end{definicion}
+
+\begin{definicion}[Clase]
+La \emph{clase} o \emph{etiqueta} $y$ es la respuesta asociada a un ejemplo, la última columna de la
+base de datos. En clasificación binaria toma dos valores, y escribimos $y\in\{0,1\}$.
 \end{definicion}
 
 \noindent En nuestro caso $x$ recoge medidas de la relación entre una respuesta y su fuente, e $y$
-vale $1$ si la respuesta contiene una alucinación y $0$ si no. El objetivo es estimar una función $f$
-que, dado un $x$ nuevo, prediga su clase. La mayoría de clasificadores binarios no devuelven la clase
-directamente, sino una probabilidad, la respuesta alucina con probabilidad $0{,}82$; un umbral
-convierte esa probabilidad en una decisión, y cuanto más caro sea equivocarse, más exigente se pone.
+vale $1$ si la respuesta contiene una alucinación y $0$ si no. Con $n$ ejemplos, la base de datos es
+el conjunto $\{(x_i,y_i)\}_{i=1}^{n}$, que apiladas por filas forman la matriz de características
+$X\in\mathbb{R}^{n\times d}$ y el vector de etiquetas $y\in\{0,1\}^n$. El objetivo es estimar una
+función $f\colon\mathbb{R}^d\to\{0,1\}$ que, dado un $x$ nuevo, prediga su clase. La mayoría de
+clasificadores binarios no devuelven la clase directamente, sino una probabilidad, la respuesta
+alucina con probabilidad $0{,}82$; un umbral convierte esa probabilidad en una decisión, y cuanto más
+caro sea equivocarse, más exigente se pone.
 
 Ajustar el modelo consiste en fijar sus parámetros con un subconjunto de \emph{entrenamiento}. Además
 de esos parámetros, cada método tiene \emph{hiperparámetros}: opciones que no se aprenden de los datos
@@ -108,351 +571,37 @@ importa es \textbf{generalizar}, acertar sobre lo nuevo más allá de los ejempl
 
 El obstáculo para generalizar es el \textbf{sobreajuste}: un modelo con demasiada capacidad memoriza
 el ruido del entrenamiento, se ajusta a sus casualidades y falla fuera de él. El fenómeno se entiende
-por el compromiso \textbf{sesgo--varianza}. El \emph{sesgo} mide cuánto se aleja el modelo de la
+por el compromiso \textbf{sesgo--varianza}~\cite{geman1992biasvariance}. El \emph{sesgo} mide cuánto se aleja el modelo de la
 realidad por ser demasiado rígido: uno muy simple no captura la estructura de los datos y erra
 sistemáticamente, tanto en entrenamiento como en test. La \emph{varianza} mide cuánto cambia el modelo
 al cambiar el conjunto de entrenamiento: uno muy flexible se pliega a cada fluctuación y es inestable,
 brillante en entrenamiento y pobre en test. Reducir uno suele aumentar el otro, y el buen rendimiento
 está en el punto intermedio, al que se llega ajustando los hiperparámetros y comprobándolo con las
-técnicas de validación de la Sección~\ref{sec:validacion}.
+técnicas de validación descritas en la metodología.
 
-Ningún modelo es el mejor para todo problema. La forma de la frontera que separa las clases, el número
-de características o el tamaño de los datos hacen que unos métodos rindan mejor que otros según el caso:
-un clasificador lineal fracasa si las clases no se pueden separar por una recta, mientras que uno muy
-flexible sobreajusta con pocos datos. Por eso en la práctica se entrenan varios y se compara su
-rendimiento, que es justo lo que hace el capítulo de resultados.
-
-% ###########################################################################
-\section{Text mining: del texto a números}
-\label{sec:textmining}
-
-Los modelos operan sobre vectores numéricos, pero el dato de partida es texto. La minería de textos
-(\emph{text mining}) es el conjunto de técnicas que transforma un texto en una representación numérica
-que un algoritmo pueda procesar. Esta sección construye esa representación paso a paso, desde partir el
-texto en palabras hasta medir cuánto se parecen dos textos.
-
-\paragraph{Tokenización y normalización.} El primer paso parte el texto en unidades llamadas
-\emph{tokens}. Una tokenización simple pasa el texto a minúsculas y extrae las secuencias
-alfanuméricas como tokens, de modo que ``WiFi'' y ``wifi'' cuenten como la misma palabra y la
-puntuación se descarte. Sobre los tokens se definen los \emph{$n$-gramas}: secuencias de $n$ tokens
-consecutivos. Un unigrama es una palabra suelta; un bigrama, dos seguidas (``free wifi''); un trigrama,
-tres. Los $n$-gramas capturan combinaciones que una palabra aislada pierde, ``no funciona'' dice lo
-contrario que ``funciona'', a costa de multiplicar el tamaño del vocabulario.
-
-Dos técnicas reducen las variantes de una palabra a una forma común, para no tratar ``jugar'' y
-``jugando'' como términos distintos. El \emph{stemming} recorta la palabra a su raíz mediante reglas
-(``jugando'', ``jugador'' $\to$ ``jug''); la \emph{lematización} la lleva a su forma de diccionario
-usando su categoría gramatical (``jugando'' $\to$ ``jugar''), lo que es más preciso y más costoso. En
-este trabajo la tokenización se mantiene simple, sin stemming ni lematización, porque la señal que
-buscamos vive en el solape literal de palabras entre respuesta y fuente, y normalizar las formas la
-difuminaría.
-
-\paragraph{Bolsa de palabras y TF-IDF.} La representación más básica de un texto es la \emph{bolsa de
-palabras}: se fija un vocabulario y cada texto se convierte en un vector con la frecuencia de cada
-término, ignorando el orden. Con los documentos ``free wifi hotel'', ``wifi hotel breakfast'' y
-``cheap hotel'', el vocabulario tiene cinco términos y la matriz de frecuencias es:
-
-\begin{center}
-\begin{tabular}{lccccc}
-\toprule
- & free & wifi & hotel & breakfast & cheap \\
-\midrule
-$d_1$: free wifi hotel      & 1 & 1 & 1 & 0 & 0 \\
-$d_2$: wifi hotel breakfast & 0 & 1 & 1 & 1 & 0 \\
-$d_3$: cheap hotel          & 0 & 0 & 1 & 0 & 1 \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\noindent El defecto de esta representación es dar el mismo peso a una palabra vacía muy repetida
-(``de'', ``el'') que a un término informativo raro. El esquema \textbf{TF-IDF} (\emph{term
-frequency--inverse document frequency}) corrige ese sesgo ponderando cada término por su rareza en la
-colección: pesa mucho lo específico y poco lo frecuente. Para un término $t$ en un documento, con $N$
-documentos en la colección y $\mathrm{df}(t)$ documentos que contienen $t$,
-\begin{equation}
-w_t \;=\; \underbrace{\mathrm{tf}(t)}_{\text{frecuencia en el documento}}\;\cdot\;
-\underbrace{\log\frac{N}{\mathrm{df}(t)}}_{\text{rareza en la colección}}.
-\end{equation}
-El primer factor sube con las veces que el término aparece en el documento; el segundo lo penaliza si
-además aparece en muchos documentos. Un término presente en casi todos tiene $\mathrm{df}(t)\approx N$,
-su logaritmo tiende a cero y su peso se anula. Sobre el ejemplo anterior, el factor de rareza es:
-\begin{center}
-\begin{tabular}{lcc}
-\toprule
-término & $\mathrm{df}(t)$ & $\log(N/\mathrm{df}(t))$ \\
-\midrule
-hotel                  & 3 & $\log(3/3)=0$ \\
-wifi                   & 2 & $\log(3/2)\approx 0{,}18$ \\
-free, breakfast, cheap & 1 & $\log(3/1)\approx 1{,}10$ \\
-\bottomrule
-\end{tabular}
-\end{center}
-La palabra ``hotel'', presente en los tres documentos, recibe peso cero: es común y no distingue nada.
-Las que solo salen en uno pesan lo máximo, porque son las que lo caracterizan frente al resto. Así, la
-fila de $d_1$ en TF-IDF deja de ser $(1,1,1,0,0)$ y pasa a $(1{,}10,\,0{,}18,\,0,\,0,\,0)$: ``free''
-manda, ``hotel'' desaparece.
-
-\paragraph{Similitud entre dos textos.} La señal central del detector es cuánto se apoya una respuesta
-en su fuente. Para medirlo representamos cada texto por su conjunto de palabras únicas.
-
-\begin{definicion}
-Dada una respuesta y su fuente, sea $R$ el conjunto de palabras únicas de la respuesta y $F$ el de la
-fuente.
-\end{definicion}
-
-\noindent Sobre $R$ y $F$ se definen tres medidas de solape con lecturas distintas:
-\begin{equation}
-\mathrm{containment} = \frac{|R\cap F|}{|R|},\qquad
-\mathrm{Jaccard} = \frac{|R\cap F|}{|R\cup F|},\qquad
-\cos(u,v) = \frac{\langle u,v\rangle}{\lVert u\rVert\,\lVert v\rVert}.
-\end{equation}
-El \textbf{containment} es la fracción de palabras de la respuesta que también están en la fuente; mira
-solo hacia la respuesta, así que no penaliza que la fuente sea larga. El \textbf{índice de Jaccard} es
-el solape simétrico, normalizado por la unión, y sí baja cuando los textos difieren mucho en tamaño. El
-\textbf{coseno TF-IDF} no trabaja sobre conjuntos, sino sobre los vectores TF-IDF de ambos textos, y
-mide el coseno del ángulo que forman (Figura~\ref{fig:coseno}): vale $1$ si apuntan en la misma
-dirección, $0$ si son perpendiculares, y pondera cada palabra por su rareza. Con $R=\{$free, wifi,
-indian$\}$ y $F=\{$wifi, indian, vegan$\}$ la intersección tiene dos palabras y la unión cuatro, luego
-el containment es $2/3\approx0{,}67$ y el Jaccard $2/4=0{,}50$.
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[scale=1.05]
-\draw[->] (0,0)--(3.4,0) node[right,font=\footnotesize]{};
-\draw[->] (0,0)--(0,3.0) node[above,font=\footnotesize]{};
-\draw[very thick,blue,-{Stealth}] (0,0)--(2.9,1.0) node[right,font=\small]{$u$};
-\draw[very thick,red,-{Stealth}] (0,0)--(1.4,2.6) node[above,font=\small]{$v$};
-\draw (0.55,0.19) arc (19:62:0.6);
-\node[font=\footnotesize] at (0.95,0.72) {$\theta$};
-\end{tikzpicture}
-\caption{El coseno mide la similitud por el ángulo $\theta$ entre los vectores de dos textos, no por su
-longitud: dos textos con las mismas proporciones de palabras apuntan en la misma dirección.}
-\label{fig:coseno}
-\end{figure}
-
-\noindent El containment cae cuando la respuesta introduce palabras nuevas, ausentes de la fuente, que
-es la huella de una invención léxica: es la medida que más nos interesa, porque captura directamente el
-anclaje de la respuesta en su fuente.
-
-\paragraph{Representación semántica.} El solape de palabras no capta sinónimos ni paráfrasis: ``coche''
-y ``automóvil'' cuentan como términos sin relación, aunque signifiquen lo mismo. Una representación que
-sí los acerca, sin recurrir a redes neuronales, es el \emph{análisis semántico latente} (LSA).
-Consiste en aplicar una descomposición en valores singulares truncada (TruncatedSVD) a la matriz
-TF-IDF: esa factorización descompone la matriz en unos pocos ejes que concentran la mayor variación, y
-proyectar los textos sobre ellos los lleva a un espacio de pocas dimensiones donde los términos que
-suelen aparecer juntos quedan cerca. Es la única representación semántica que usamos, coherente con un
-enfoque clásico y barato.
-
-% ###########################################################################
-\section{Metodología}
-\label{sec:metodologia}
-
-\subsection{Fases del análisis}
-\label{sec:fases}
-
-Un problema de clasificación con datos tabulares sigue un flujo estándar, del dato en crudo a la
-evaluación final (Figura~\ref{fig:pipeline}).
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.95\textwidth]{concept_pipeline}
-\caption{Flujo de trabajo: de los datos en crudo a la evaluación sobre el conjunto de test.}
-\label{fig:pipeline}
-\end{figure}
-
-\begin{itemize}
-\item \textbf{Análisis descriptivo.} Caracteriza los datos antes de modelar: la distribución de cada
-variable, el reparto de la etiqueta y las relaciones entre unas y otra. Orienta todas las decisiones
-posteriores y detecta problemas, como una clase muy minoritaria o variables redundantes entre sí.
-\item \textbf{Muestreo.} Corrige, si hace falta, un reparto de clases muy desigual mediante remuestreo:
-replicar la clase minoritaria (\emph{oversampling}) o reducir la mayoritaria (\emph{undersampling}),
-para que el modelo no se limite a predecir siempre la clase dominante.
-\item \textbf{Tratamiento de datos.} Depura las entradas: imputa los valores ausentes (\emph{missing})
-con un valor plausible y acota los valores atípicos (\emph{outliers}) que distorsionan el ajuste.
-\item \textbf{Modelización.} Entrena los clasificadores y ajusta sus hiperparámetros.
-\item \textbf{Validación.} Estima el rendimiento sobre datos no vistos y lo cuantifica con métricas.
-\end{itemize}
-
-\noindent Las dos últimas fases concentran la carga metodológica y se desarrollan a continuación:
-primero las métricas con que se mide un clasificador, luego cómo se valida y se selecciona, y por
-último los modelos que entrenamos.
-
-\subsection{Métricas de evaluación}
-\label{sec:metricas}
-
-Evaluar un clasificador binario empieza por contar sus aciertos y errores. Tomando como clase positiva
-la que interesa detectar (aquí, la alucinación), cada predicción cae en una de cuatro casillas: los
-verdaderos positivos (VP) y verdaderos negativos (VN) son aciertos; los falsos positivos (FP, error de
-tipo I) y falsos negativos (FN, error de tipo II) son los dos tipos de fallo. Su recuento se organiza
-en la \emph{matriz de confusión} (Figura~\ref{fig:confusion}).
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.5\textwidth]{concept_matriz_confusion}
-\caption{Matriz de confusión. El falso negativo (tipo II) es un positivo real que se predice negativo;
-el falso positivo (tipo I), un negativo que se predice positivo.}
-\label{fig:confusion}
-\end{figure}
-
-Los dos errores rara vez cuestan lo mismo, y su coste depende del problema:
-
-\begin{center}
-\begin{tabular}{p{3.0cm}p{4.9cm}p{5.1cm}}
-\toprule
- & Diagnóstico médico & Detección de alucinaciones \\
-\midrule
-\textbf{Falso negativo} & se dice sano a un paciente enfermo & una invención pasa sin ser detectada \\
-\textbf{Falso positivo} & se trata a un paciente sano & se marca como inventado un texto correcto \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\noindent En nuestro caso el falso negativo, una alucinación que se cuela, es el error caro, y las
-métricas siguientes permiten primar su detección.
-
-Sobre los cuatro conteos se definen las dos medidas básicas. La \textbf{precisión} indica cuántas de
-las predicciones positivas fueron correctas, es decir, cómo de fiable es el modelo cuando marca algo
-como positivo. La \textbf{exhaustividad} o \emph{recall} (también sensibilidad) indica cuántos de los
-positivos reales llegó a detectar:
-\begin{equation}
-\mathrm{precisión} = \frac{VP}{VP+FP},\qquad
-\mathrm{recall} = \frac{VP}{VP+FN}.
-\end{equation}
-Precisión y recall se mueven en sentidos opuestos, y el equilibrio lo fija el umbral de decisión. Si el
-modelo solo predice positivo cuando está muy seguro, acierta casi siempre que lo hace (precisión alta),
-pero deja escapar muchos positivos dudosos (recall bajo). Si predice positivo a la mínima, no se le
-escapa casi ninguno (recall alto) a costa de muchas falsas alarmas (precisión baja). En el extremo, un
-modelo que marca todo como positivo tiene recall $1$ y precisión igual a la simple proporción de
-positivos.
-
-El valor \textbf{F1} resume ambos en su media armónica, que solo es alta cuando los dos lo son (si uno
-se acerca a cero, arrastra al conjunto):
-\begin{equation}
-F_1 = 2\,\frac{\mathrm{precisión}\cdot\mathrm{recall}}{\mathrm{precisión}+\mathrm{recall}}.
-\end{equation}
-El F1 supone que precisión y recall importan igual, lo que no siempre ocurre. Cuando detectar
-positivos pesa más que evitar falsas alarmas, se usa su generalización $F_\beta$, que valora el recall
-$\beta^2$ veces más que la precisión:
-\begin{equation}
-F_\beta = (1+\beta^2)\,\frac{\mathrm{precisión}\cdot\mathrm{recall}}
-{\beta^2\,\mathrm{precisión}+\mathrm{recall}}.
-\end{equation}
-
-Una medida más intuitiva, la \textbf{accuracy} o fracción de aciertos,
-$\tfrac{VP+VN}{VP+VN+FP+FN}$, engaña cuando una clase domina: si el $90\,\%$ de los ejemplos son
-negativos, predecir siempre negativo ya da un $90\,\%$ de accuracy sin detectar un solo positivo. La
-\textbf{balanced accuracy} corrige ese espejismo promediando el recall de cada clase. Un ejemplo lo
-fija: sobre $300$ respuestas con $100$ alucinaciones reales, un detector caza $70$ ($VP=70$, $FN=30$) a
-costa de $20$ falsas alarmas ($FP=20$, $VN=180$). Su precisión es $70/90\approx0{,}78$, el recall
-$70/100=0{,}70$ y el $F_1\approx0{,}74$; la accuracy sube a $(70+180)/300\approx0{,}83$ porque acierta
-casi todos los negativos, que son mayoría, mientras que la balanced accuracy,
-$\tfrac12(0{,}70+0{,}90)=0{,}80$, rebaja esa cifra optimista.
-
-Todas las métricas anteriores dependen del umbral con que la probabilidad se convierte en decisión.
-Dos curvas recorren todos los umbrales de golpe. La \textbf{curva ROC} (Figura~\ref{fig:curvas},
-izquierda) contrapone la tasa de verdaderos positivos (el recall) frente a la tasa de falsos positivos
-al variar el umbral; su área, el \textbf{AUC}, es la probabilidad de que un positivo tomado al azar
-reciba mayor score que un negativo tomado al azar. El AUC tiene dos propiedades que lo hacen una medida
-sólida para comparar modelos: es invariante a la escala del score, pues solo importa el orden de las
-predicciones, y es invariante al umbral, pues los resume todos. La \textbf{curva precisión--recall}
-(Figura~\ref{fig:curvas}, derecha), en cambio, sí refleja el desbalance de clases, porque la precisión
-depende de la proporción de positivos; un modelo bueno mantiene la precisión alta aun a recall alto, y
-su curva se acerca a la esquina superior derecha. Por eso la miramos además del AUC cuando la clase
-positiva es minoritaria.
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[scale=1.9]
-\draw[->] (0,0)--(1.12,0) node[right,font=\footnotesize]{tasa de FP};
-\draw[->] (0,0)--(0,1.12) node[above,font=\footnotesize]{tasa de VP};
-\draw[dashed] (0,0)--(1,1) node[pos=0.6,below right,font=\footnotesize]{azar};
-\draw[very thick,blue] (0,0) .. controls (0.05,0.6) and (0.25,0.95) .. (1,1);
-\node[font=\footnotesize] at (0.58,0.4) {AUC};
-\node[font=\small] at (0.5,-0.28) {(a) curva ROC};
-\begin{scope}[xshift=3.4cm]
-\draw[->] (0,0)--(1.12,0) node[right,font=\footnotesize]{recall};
-\draw[->] (0,0)--(0,1.12) node[above,font=\footnotesize]{precisión};
-\draw[very thick,blue] (0,0.97) .. controls (0.6,0.95) and (0.8,0.85) .. (1,0.35);
-\node[font=\small] at (0.5,-0.28) {(b) curva precisión--recall};
-\end{scope}
-\end{tikzpicture}
-\caption{Las dos curvas que recorren todos los umbrales. La ROC resume la separación en el AUC; la
-precisión--recall muestra a partir de qué recall se degrada la precisión.}
-\label{fig:curvas}
-\end{figure}
-
-Elegido un modelo, queda fijar el umbral $t$ que decide positivo cuando el score supera $t$. El
-\textbf{índice de Youden} elige el que maximiza $J = \text{sensibilidad} + \text{especificidad} - 1$,
-esto es, el punto de la curva ROC más alejado de la diagonal, donde mejor se separan las dos clases.
-
-\subsection{Validación y selección de características}
-\label{sec:validacion}
-
-\paragraph{Validación cruzada.} Medir el rendimiento sobre los mismos datos con que se entrena infla el
-resultado, porque el modelo ya los conoce. Reservar una parte para test lo evita, pero entonces el
-resultado depende de qué ejemplos tocaron en esa partición. La \textbf{validación cruzada} de $k$
-iteraciones elimina esa dependencia: parte el entrenamiento en $k$ bloques, entrena con $k-1$ y valida
-con el restante, y repite rotando el bloque de validación (Figura~\ref{fig:groupkfold}); el rendimiento
-final es el promedio de las $k$ rondas, que ya no depende de una partición afortunada.
-
-Esta partición debe respetar la estructura de los datos. Cuando varios ejemplos comparten una misma
-unidad, aquí un mismo documento fuente del que salen varias respuestas, esa unidad tiene que caer
-entera en un solo bloque. Si no, el modelo ve en validación una respuesta casi idéntica a otra que tuvo
-en entrenamiento y el resultado se infla por esa filtración. La variante que lo garantiza es el
-\textbf{GroupKFold}, que agrupa por la unidad e impide que un documento aparezca a la vez en
-entrenamiento y validación.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.72\textwidth]{concept_groupkfold}
-\caption{GroupKFold por documento: cada fuente cae entera en un único bloque, de modo que ninguna
-aparece a la vez en entrenamiento (azul) y validación (naranja).}
-\label{fig:groupkfold}
-\end{figure}
-
-\paragraph{Búsqueda en rejilla.} Casi todos los modelos tienen hiperparámetros, y distintas
-combinaciones dan resultados distintos: no es lo mismo tomar los $3$ vecinos más cercanos con distancia
-euclídea que los $11$ con distancia de Manhattan. La \textbf{búsqueda en rejilla} (\emph{grid search})
-los ajusta probando un conjunto de combinaciones, evaluando cada una por validación cruzada y
-conservando la mejor, sin tocar el test (Figura~\ref{fig:gridsearch}). Su coste crece con el producto
-de los valores de cada hiperparámetro por las iteraciones de la validación: optimizar tres
-hiperparámetros con tres valores cada uno y validación cruzada de cuatro iteraciones ya son
-$3\cdot3\cdot3\cdot4=108$ ajustes. Para modelos clásicos ese coste es asumible en un ordenador
-corriente.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.5\textwidth]{concept_gridsearch}
-\caption{Búsqueda en rejilla: cada celda es el rendimiento medio de una combinación de hiperparámetros
-en validación cruzada; se conserva la mejor.}
-\label{fig:gridsearch}
-\end{figure}
-
-\paragraph{Selección de características.} Con muchas variables conviene quedarse con las informativas y
-descartar las redundantes, tanto para mejorar el modelo como para entenderlo. Hay dos familias. Los
-métodos de \textbf{filtro} puntúan cada variable por una medida estadística de su relación con la
-etiqueta, al margen del modelo; son rápidos, pero ignoran las interacciones y la redundancia entre
-variables, así que pueden quedarse con dos variables casi idénticas. Los métodos \textbf{envolventes}
-(\emph{wrapper}) usan el propio modelo como juez: prueban subconjuntos y se quedan con el que mejor
-valida, a mayor coste. La \textbf{eliminación recursiva de características} (RFE) es el envolvente que
-usamos: entrena con todas las variables, elimina la menos importante, reentrena y repite, lo que
-produce un orden de importancia. El número final de variables se fija por el \emph{método del codo}, el
-punto de la curva de rendimiento a partir del cual añadir variables ya no aporta.
+Ningún modelo es el mejor para todo problema~\cite{wolpert1996nfl}. La
+forma de la frontera que separa las clases, el número de características o el tamaño de los datos hacen
+que unos métodos rindan mejor que otros según el caso: un clasificador lineal fracasa si las clases no
+se pueden separar por una recta, mientras que uno muy flexible sobreajusta con pocos datos. Por eso en
+la práctica se entrenan varios y se compara su rendimiento, que es justo lo que hace el capítulo de
+resultados.
 
 \subsection{Regresión logística}
 \label{sec:logreg}
 
-La regresión logística es el clasificador lineal por excelencia y sirve de \textbf{modelo base}: la
-referencia simple e interpretable contra la que se miden los demás. Pese a su nombre, resuelve una
-clasificación, no una regresión. La idea es modelar la probabilidad de la clase positiva como una
-combinación lineal de las características, pero acotada al intervalo $(0,1)$ para que pueda leerse como
-probabilidad. El acotado lo hace la función \emph{sigmoide}:
+La regresión logística \cite{cox1958logreg} es el clasificador lineal por excelencia y sirve de
+\textbf{modelo base}: la referencia simple e interpretable contra la que se miden los demás. Pese a su
+nombre, resuelve una clasificación, no una regresión. La idea es modelar la probabilidad de la clase
+positiva como una combinación lineal de las características, pero acotada al intervalo $(0,1)$ para que
+pueda leerse como probabilidad. El acotado lo hace la función \emph{sigmoide}:
 \begin{equation}
 \sigma(z)=\frac{1}{1+e^{-z}},\qquad z = \beta_0 + \beta^{\top}x,\qquad p(y=1\mid x)=\sigma(z).
+\label{eq:sigmoide}
 \end{equation}
-La sigmoide (Figura~\ref{fig:sigmoide}) comprime cualquier valor real a $(0,1)$: valores muy negativos
-de $z$ dan probabilidad cercana a $0$, muy positivos cercana a $1$, y $z=0$ da exactamente $0{,}5$, que
-marca la frontera de decisión.
+Aquí $\beta_0\in\mathbb{R}$ es el término independiente y $\beta\in\mathbb{R}^d$ el vector de
+coeficientes, uno por característica. La sigmoide (Figura~\ref{fig:sigmoide}) comprime cualquier valor
+real a $(0,1)$: valores muy negativos de $z$ dan probabilidad cercana a $0$, muy positivos cercana a
+$1$, y $z=0$ da exactamente $0{,}5$, que marca la frontera de decisión.
 
 \begin{figure}[H]
 \centering
@@ -472,37 +621,64 @@ La sigmoide admite una lectura muy útil si se despeja. Partiendo de $p=\sigma(z
 $1-p = e^{-z}/(1+e^{-z})$, y dividiendo,
 \begin{equation}
 \frac{p}{1-p} = e^{z}\quad\Longrightarrow\quad \log\frac{p}{1-p} = z = \beta_0 + \beta^{\top}x.
+\label{eq:logodds}
 \end{equation}
-Es decir, la combinación lineal es el logaritmo de la razón entre la probabilidad de la clase positiva
-y la de la negativa, el \emph{log-odds}. Esta forma da a los coeficientes una lectura directa, y es la
-mayor virtud del modelo: cada $\beta_i$ es cuánto varía el log-odds de la clase positiva al aumentar
-una unidad la característica $i$, con las demás fijas. Su signo indica el sentido (un $\beta_i$ positivo
+La combinación lineal es el logaritmo de la razón entre la probabilidad de la clase positiva y la de la
+negativa, el \emph{log-odds}. Esta forma da a los coeficientes una lectura directa, y es la mayor
+virtud del modelo: cada $\beta_i$ es cuánto varía el log-odds de la clase positiva al aumentar una
+unidad la característica $i$, con las demás fijas. Su signo indica el sentido (un $\beta_i$ positivo
 empuja hacia la clase positiva) y su magnitud, la fuerza. Un coeficiente negativo grande sobre el
 containment, por ejemplo, significaría que a mayor solape con la fuente, menor probabilidad de
 alucinación, justo lo esperable.
 
-Para ver el modelo en acción conviene reducirlo a una sola característica. Supongamos que clasificamos
-respuestas usando únicamente su containment $x$, con $p(x)=\sigma(\beta_0+\beta_1 x)$. Cada respuesta
-del entrenamiento se sitúa en el eje según su containment, y a partir de las etiquetas se estiman
-$\beta_0$ y $\beta_1$, que dibujan una sigmoide: las respuestas con poco solape reciben probabilidad
-alta de alucinar y las de mucho solape, baja. Para clasificar una respuesta nueva basta situarla por su
-containment y leer la probabilidad que le asigna la curva; si supera el umbral, se marca como
-alucinación.
+Reducido a una sola característica, el containment $x$, el modelo es $p(x)=\sigma(\beta_0+\beta_1 x)$.
+Un ejemplo fija la lectura. Supongamos $\beta_0 = 2$ y $\beta_1 = -4$, coeficientes que un ajuste podría
+producir para este problema. Una respuesta con containment $x=0{,}25$ recibe
+$z = 2 - 4\cdot 0{,}25 = 1$, luego probabilidad de alucinar $\sigma(1)\approx 0{,}73$: poco solape con la
+fuente, sospecha alta. Otra con $x=0{,}75$ recibe $z = 2 - 4\cdot 0{,}75 = -1$ y
+$\sigma(-1)\approx 0{,}27$: mucho solape, sospecha baja. El signo negativo de $\beta_1$ expresa
+justamente lo esperable, a más apoyo en la fuente, menos probabilidad de invención, y la frontera de
+decisión cae donde $z=0$, esto es, en $x = -\beta_0/\beta_1 = 0{,}5$. Una respuesta nueva se clasifica
+como alucinación si su probabilidad supera el umbral fijado.
 
-Los coeficientes se estiman buscando los que hacen más probables las etiquetas observadas, lo que
-equivale a minimizar la \emph{entropía cruzada}, una función de pérdida que castiga predecir con
-confianza la clase equivocada:
+Queda estimar los coeficientes $\beta$ a partir del entrenamiento. El criterio es la \textbf{máxima
+verosimilitud}: elegir los $\beta$ que hacen más probables las etiquetas observadas. Con las
+predicciones abreviadas $p_i=\sigma(\beta_0+\beta^{\top}x_i)$ y suponiendo los ejemplos independientes,
+la verosimilitud de la base de datos es el producto de las probabilidades que el modelo asigna a cada
+etiqueta real,
 \begin{equation}
-\mathcal{L}(\beta) = -\frac{1}{n}\sum_{i=1}^{n}\Big[y_i\log p_i + (1-y_i)\log(1-p_i)\Big].
+L(\beta) = \prod_{i=1}^{n} p_i^{\,y_i}\,(1-p_i)^{\,1-y_i},
+\label{eq:verosim}
+\end{equation}
+donde el exponente selecciona el factor que toca: $p_i$ si $y_i=1$ y $1-p_i$ si $y_i=0$. Maximizar un
+producto de muchos factores es incómodo, así que tomamos logaritmos, que convierten el producto en
+suma y no mueven el máximo por ser el logaritmo creciente. Cambiando el signo para pasar de maximizar a
+minimizar y dividiendo por $n$ para promediar, se obtiene la \emph{entropía cruzada}, la función de
+pérdida que castiga predecir con confianza la clase equivocada:
+\begin{equation}
+\mathcal{L}(\beta) = -\frac{1}{n}\log L(\beta)
+= -\frac{1}{n}\sum_{i=1}^{n}\Big[y_i\log p_i + (1-y_i)\log(1-p_i)\Big].
+\label{eq:crossentropy}
 \end{equation}
 Cuando la etiqueta real es $y_i=1$, solo pesa el término $-\log p_i$, que se dispara si el modelo
 asigna a ese ejemplo una probabilidad $p_i$ próxima a cero; cuando es $y_i=0$, pesa $-\log(1-p_i)$, con
-el castigo simétrico. Esta pérdida es convexa, y su mínimo se busca por descenso de gradiente: se parte
-de unos coeficientes cualesquiera y se corrigen paso a paso en la dirección que más reduce la pérdida,
-hasta converger. Es el mismo método que está en la base de muchos algoritmos de aprendizaje. Para
-frenar el sobreajuste se añade un término de \textbf{regularización} que penaliza coeficientes grandes:
-la penalización L2 los encoge de forma suave, y la L1 lleva algunos a cero exacto, con lo que además
-descarta variables.
+el castigo simétrico. A diferencia de la regresión lineal, cuya pérdida cuadrática tiene la solución
+cerrada $\hat\beta=(X^{\top}X)^{-1}X^{\top}y$, la entropía cruzada no se puede despejar: su gradiente
+es no lineal en $\beta$. Sí es convexa, con lo que tiene un único mínimo, y ese mínimo se alcanza donde
+el gradiente se anula. Usando la matriz de características $X\in\mathbb{R}^{n\times d}$, el vector de
+etiquetas $y$ y el vector de predicciones $p=(p_1,\dots,p_n)^{\top}$, el gradiente tiene una forma
+compacta,
+\begin{equation}
+\nabla_{\beta}\,\mathcal{L}(\beta) = \frac{1}{n}\,X^{\top}(p - y),
+\label{eq:gradiente}
+\end{equation}
+el promedio de los errores $p_i-y_i$ ponderado por las características. Como no se anula en forma
+cerrada, se resuelve por \textbf{descenso de gradiente}~\cite{cauchy1847gradient}: se parte de unos coeficientes cualesquiera y se corrigen paso a paso en la
+dirección contraria al gradiente, $\beta \leftarrow \beta - \eta\,\nabla_{\beta}\mathcal{L}$, con
+$\eta>0$ el tamaño de paso, hasta converger. Es el mismo método que está en la base de muchos
+algoritmos de aprendizaje. Para frenar el sobreajuste se añade un término de \textbf{regularización}
+que penaliza coeficientes grandes: la penalización L2 los encoge de forma suave, y la L1 lleva algunos
+a cero exacto, con lo que además descarta variables.
 
 \begin{itemize}
 \item \textbf{Ventajas:} interpretable por sus coeficientes, muy barata de entrenar y con
@@ -514,21 +690,27 @@ entre clases es curva; conviene además quitar antes las variables muy correlaci
 \subsection{K vecinos más cercanos}
 \label{sec:knn}
 
-El clasificador de $k$ vecinos más cercanos (KNN) no construye ningún modelo explícito: guarda los
-datos de entrenamiento y clasifica cada ejemplo nuevo por \textbf{vecindad}, mirando a qué clase
-pertenecen los que tiene alrededor. La idea plantea dos preguntas: dónde se sitúan los datos y cómo se
-mide la cercanía. Lo primero se resuelve con el vector de características, que ubica cada ejemplo como un
-punto de $\mathbb{R}^d$. Para lo segundo se usa una distancia; las más habituales son la euclídea (la
-del teorema de Pitágoras) y la de Manhattan (la suma de diferencias en valor absoluto, como recorrer
-una cuadrícula de calles),
+El clasificador de $k$ vecinos más cercanos (KNN) \cite{cover1967knn} no construye ningún modelo
+explícito: guarda los datos de entrenamiento y clasifica cada ejemplo nuevo por \textbf{vecindad},
+mirando a qué clase pertenecen los que tiene alrededor. La idea plantea dos preguntas: dónde se sitúan
+los datos y cómo se mide la cercanía. Lo primero se resuelve con el vector de características, que ubica
+cada ejemplo como un punto de $\mathbb{R}^d$. Para lo segundo se usa una distancia; las más habituales
+son la euclídea (la del teorema de Pitágoras) y la de Manhattan (la suma de diferencias en valor
+absoluto, como recorrer una cuadrícula de calles),
 \begin{equation}
-d_{\text{euclídea}}(p,q)=\sqrt{\textstyle\sum_i (p_i-q_i)^2},\qquad
-d_{\text{Manhattan}}(p,q)=\textstyle\sum_i |p_i-q_i|.
+d_{\text{euclídea}}(p,q)=\sqrt{\textstyle\sum_{i=1}^{d} (p_i-q_i)^2},\qquad
+d_{\text{Manhattan}}(p,q)=\textstyle\sum_{i=1}^{d} |p_i-q_i|.
+\label{eq:distancias}
 \end{equation}
-Para clasificar un punto nuevo se toman sus $k$ vecinos más cercanos y se le asigna la clase mayoritaria
-entre ellos (Figura~\ref{fig:knn}). La elección de $k$ cambia el resultado: en la figura, el punto
-nuevo tiene dos vecinos de una clase y uno de otra entre los tres más próximos, así que con $k=3$ se
-clasifica en la primera; ampliando a $k=5$ entran vecinos más lejanos que pueden invertir el voto.
+Ambas son casos de la distancia de Minkowski $\big(\sum_i |p_i-q_i|^r\big)^{1/r}$, con $r=2$ y $r=1$
+respectivamente: la euclídea mide la distancia en línea recta entre dos puntos, la de Manhattan la que
+se recorre avanzando por ejes, como quien cruza una ciudad de calles en cuadrícula. Para clasificar un
+punto nuevo se calculan sus distancias a todos los ejemplos de entrenamiento, se toman los $k$ más
+cercanos y se le asigna la clase mayoritaria entre ellos (Figura~\ref{fig:knn}). La elección de $k$
+cambia el resultado: en la figura, entre los tres vecinos más próximos gana una clase por dos votos a
+uno, así que con $k=3$ el punto se clasifica en ella; al ampliar el radio a $k=5$ entran vecinos más
+lejanos de la otra clase que pueden invertir el voto. El valor de $k$ es, por tanto, un hiperparámetro
+que hay que fijar con cuidado.
 
 \begin{figure}[H]
 \centering
@@ -548,12 +730,17 @@ círculo interior es $k=3$; ampliar el radio ($k=5$) puede cambiar la decisión.
 \label{fig:knn}
 \end{figure}
 
-El parámetro $k$ gobierna el compromiso sesgo--varianza: un $k$ pequeño sigue el ruido local y
-sobreajusta, mientras que uno grande promedia sobre vecinos lejanos y aumenta el sesgo, difuminando la
-frontera entre clases parecidas. El mejor valor depende de los datos y se busca por validación, aunque
-una regla común de partida es $k=\sqrt{N}$, con $N$ el número de ejemplos. Como todo se reduce a
-distancias, KNN es sensible a la escala de las variables, así que se estandarizan antes; sin ello, una
-característica de rango amplio dominaría el cálculo y ahogaría a las demás.
+El parámetro $k$ gobierna el compromiso sesgo--varianza. Un $k$ pequeño hace la frontera muy sensible
+al ruido local: con $k=1$ cada punto manda sobre su vecindad inmediata y basta un ejemplo mal
+etiquetado para crear un islote de clase equivocada, lo que sobreajusta. Un $k$ grande promedia sobre
+vecinos cada vez más lejanos, suaviza la frontera y aumenta el sesgo, hasta el extremo de que con $k=N$
+todo punto recibe la clase mayoritaria global. El mejor valor depende de los datos y se busca por
+validación, aunque una regla común de partida es $k=\sqrt{N}$, con $N$ el número de ejemplos. Como todo
+se reduce a distancias, KNN es sensible a la escala de las variables y exige estandarizarlas antes. Sin
+ese paso, una característica medida en miles (por ejemplo, la longitud de la respuesta en caracteres)
+dominaría la distancia y ahogaría a otra acotada entre $0$ y $1$ (un solape), que apenas contaría por
+pequeña que fuese su diferencia; estandarizar deja a todas en el mismo rango y con el mismo peso a
+priori.
 
 \begin{itemize}
 \item \textbf{Ventajas:} no asume ninguna forma para la frontera entre clases, funciona bien con muchos
@@ -565,11 +752,13 @@ entrenamiento, y el método se degrada cuando hay muchas dimensiones o la distan
 \subsection{Árboles de decisión}
 \label{sec:arboles}
 
-Un árbol de decisión clasifica mediante una secuencia de preguntas, y es la pieza sobre la que se
-construyen los dos modelos siguientes. Tiene dos elementos: los \emph{nodos} internos, donde se toma
-una decisión partiendo los datos por un umbral sobre una característica (``¿containment $<0{,}5$?''), y
-las \emph{hojas}, que asignan una clase (Figura~\ref{fig:arbol}). Clasificar un ejemplo es recorrer el
-árbol desde la raíz, siguiendo en cada nodo la rama que le corresponde, hasta llegar a una hoja.
+Un árbol de decisión \cite{breiman1984cart,quinlan1986id3} clasifica imitando la forma en que una
+persona decide a base de preguntas encadenadas, cada una más fina que la anterior, y es además la pieza
+sobre la que se construyen los dos modelos siguientes. Tiene dos elementos: los \emph{nodos} internos,
+donde se toma una decisión partiendo los datos por un umbral sobre una característica (``¿containment
+$<0{,}5$?''), y las \emph{hojas}, que asignan una clase (Figura~\ref{fig:arbol}). Clasificar un ejemplo
+consiste en recorrer el árbol desde la raíz, respondiendo en cada nodo la pregunta con los valores de
+ese ejemplo y siguiendo la rama correspondiente, hasta caer en una hoja, que da la clase predicha.
 
 \begin{figure}[H]
 \centering
@@ -590,20 +779,40 @@ las \emph{hojas}, que asignan una clase (Figura~\ref{fig:arbol}). Clasificar un 
 \label{fig:arbol}
 \end{figure}
 
-El árbol se construye de arriba abajo y de forma recursiva. En cada nodo prueba cortes sobre las
-características y se queda con el que más reduce la \emph{impureza} de los nodos que genera, es decir,
-el que deja a cada lado ejemplos lo más de una sola clase posible. La impureza de un nodo con
-proporciones de clase $p_k$ se mide con el índice de Gini o con la entropía:
+El árbol se construye de arriba abajo y de forma recursiva. La pregunta clave en cada nodo es qué corte
+elegir de entre todos los posibles, y el criterio es la \emph{pureza}: un buen corte deja a cada lado
+ejemplos lo más de una sola clase que se pueda, porque un grupo homogéneo se etiqueta sin dudar,
+mientras que uno mezclado deja la decisión en el aire. Para formalizarlo se necesita medir cuánto se
+mezclan las clases en un nodo, y esa medida es la \emph{impureza}, que se cuantifica con el índice de
+Gini o con la entropía.
+
+\begin{definicion}[Impureza de un nodo]
+Sea un nodo con proporciones de clase $p_1,\dots,p_c$ (con $\sum_k p_k = 1$). Su \emph{índice de Gini}
+y su \emph{entropía}~\cite{shannon1948entropy} son
+\[
+G = 1 - \sum_{k=1}^{c} p_k^2,\qquad H = -\sum_{k=1}^{c} p_k \log_2 p_k.
+\]
+Ambas valen cero cuando el nodo es puro (una sola clase, alguna $p_k=1$) y son máximas cuando las
+clases están repartidas por igual.
+\end{definicion}
+
+\noindent La calidad de un corte se mide por cuánto baja la impureza al pasar del nodo padre a sus dos
+hijos. Si un nodo padre con impureza $I(\text{padre})$ se parte en un hijo izquierdo y uno derecho, que
+reciben una fracción $w_{\text{izq}}$ y $w_{\text{der}}$ de los ejemplos, la \emph{reducción de
+impureza} del corte es
 \begin{equation}
-G = 1 - \sum_k p_k^2,\qquad H = -\sum_k p_k \log_2 p_k.
+\Delta I = I(\text{padre})
+         - \big(w_{\text{izq}}\,I(\text{izq}) + w_{\text{der}}\,I(\text{der})\big),
+\label{eq:ganancia}
 \end{equation}
-Ambas valen cero cuando el nodo es puro (una sola clase) y son máximas cuando las clases están al
-$50\,\%$. Por ejemplo, un nodo con $40$ ejemplos que alucinan y $60$ limpios tiene $G = 1 - 0{,}4^2 -
-0{,}6^2 = 0{,}48$; un corte que lo separe en un nodo de $30$ alucina y $10$ limpia ($G=0{,}375$) y otro
-de $10$ alucina y $50$ limpia ($G\approx0{,}28$) baja la impureza media ponderada por debajo de
-$0{,}48$, así que el árbol prefiere ese corte al que menos la reduzca. El proceso se repite en cada
-nodo y se detiene cuando el nodo es puro, no quedan características útiles o se alcanza un límite fijado
-de antemano.
+la impureza del padre menos la media de la de los hijos, ponderada por cuántos ejemplos cae a cada lado.
+El árbol elige en cada nodo el corte que maximiza $\Delta I$. Por ejemplo, un nodo con $40$ ejemplos que
+alucinan y $60$ limpios tiene $G = 1 - 0{,}4^2 - 0{,}6^2 = 0{,}48$; un corte que lo separe en un hijo de
+$30$ alucina y $10$ limpia ($G=0{,}375$) y otro de $10$ alucina y $50$ limpia ($G\approx0{,}28$) deja
+una impureza media de $\tfrac{40}{100}\cdot0{,}375 + \tfrac{60}{100}\cdot0{,}28 \approx 0{,}32$, con lo
+que $\Delta G \approx 0{,}16$; el árbol prefiere ese corte a otro que reduzca menos la impureza. El
+proceso se repite en cada nodo y se detiene cuando el nodo es puro, no quedan características útiles o se
+alcanza un límite fijado de antemano.
 
 Sin freno, el árbol crece hasta separar por completo el entrenamiento, memorizándolo, lo que lo hace
 muy flexible pero propenso al sobreajuste: un árbol profundo aprende las casualidades de los datos y
@@ -621,23 +830,39 @@ muy distintos, y sobreajusta con facilidad. Los dos modelos siguientes corrigen 
 \subsection{Random Forest}
 \label{sec:rf}
 
-Un bosque aleatorio (\emph{Random Forest}) combina muchos árboles para ganar la estabilidad que a uno
-solo le falta. Se apoya en una técnica llamada \emph{bagging} (\emph{bootstrap aggregating}): de la
-base de entrenamiento se extraen $B$ muestras aleatorias con reemplazo, cada una del mismo tamaño que
-la original pero con ejemplos repetidos y otros ausentes, y con cada muestra se entrena un árbol. Para
-clasificar un ejemplo nuevo, cada uno de los $B$ árboles emite su voto y se toma la clase más votada,
+Un bosque aleatorio (\emph{Random Forest}) \cite{breiman2001rf} combina muchos árboles para ganar la
+estabilidad que a uno solo le falta, con la misma lógica por la que la media de muchas opiniones
+independientes acierta más que una sola. Se apoya en una técnica llamada \emph{bagging} (\emph{bootstrap
+aggregating}): de la base de entrenamiento se extraen $B$ muestras aleatorias con reemplazo, cada una
+del mismo tamaño que la original pero con ejemplos repetidos y otros ausentes, y con cada muestra se
+entrena un árbol distinto. Para clasificar un ejemplo nuevo, cada uno de los $B$ árboles emite su voto
+y se toma la clase más votada,
 \begin{equation}
 \hat{y}(x) = \text{clase más votada entre } \{T_1(x),\dots,T_B(x)\}.
+\label{eq:voto}
 \end{equation}
-El bagging reduce la varianza sin aumentar el sesgo: la predicción de un solo árbol es muy sensible al
-ruido del entrenamiento, pero el promedio de muchos árboles poco correlacionados cancela ese ruido
-individual, igual que promediar muchas mediciones ruidosas se acerca al valor real. Para que los
-árboles no se parezcan demasiado, y su promedio valga la pena, el bosque añade un segundo ingrediente
-de azar: en cada corte no considera todas las características, sino un subconjunto aleatorio de ellas
-(típicamente $\sqrt{d}$ de las $d$ disponibles en clasificación). Así ningún árbol se apoya siempre en
-la misma variable dominante, y el conjunto queda des-correlacionado. El número de árboles $B$, su
-profundidad y cuántas características se consideran en cada corte son sus hiperparámetros, y suelen
-buscarse probando.
+
+El bagging reduce la varianza sin aumentar el sesgo, y merece la pena ver por qué con un poco de
+detalle. Pensemos primero en la versión con predicciones numéricas, donde cada árbol devuelve la
+probabilidad de la clase positiva y el conjunto las promedia. Si cada árbol individual tiene varianza
+$\sigma^2$ y dos árboles distintos tienen una correlación $\rho$ entre sus predicciones, la varianza
+del promedio de los $B$ árboles es
+\begin{equation}
+\mathrm{Var}\!\left(\frac{1}{B}\sum_{b=1}^{B} T_b(x)\right)
+= \rho\,\sigma^2 + \frac{1-\rho}{B}\,\sigma^2.
+\label{eq:varbagging}
+\end{equation}
+El segundo sumando se desvanece al crecer $B$, así que promediar muchos árboles cancela la parte no
+correlacionada del ruido, igual que promediar muchas mediciones ruidosas se acerca al valor real. El
+primer sumando, en cambio, no depende de $B$: queda un suelo de varianza $\rho\,\sigma^2$ que solo baja
+si los árboles están poco correlacionados. Como el promedio no cambia la predicción esperada, el sesgo
+se mantiene. De aquí sale la receta del bosque: para bajar ese suelo, hay que des-correlacionar los
+árboles. El bagging ya los diferencia al entrenar cada uno con una muestra distinta, y el bosque añade
+un segundo golpe de azar: en cada corte no considera todas las características, sino un subconjunto
+aleatorio de ellas (típicamente $\sqrt{d}$ de las $d$ disponibles en clasificación). Así ningún árbol
+se apoya siempre en la misma variable dominante, baja $\rho$ y el conjunto gana estabilidad. El número
+de árboles $B$, su profundidad y cuántas características se consideran en cada corte son sus
+hiperparámetros, y suelen buscarse probando.
 
 \begin{itemize}
 \item \textbf{Ventajas:} robusto y preciso, uno de los mejores clasificadores para datos tabulares;
@@ -650,24 +875,30 @@ evaluar, y puede desajustarse con datos muy ruidosos si no se controla el númer
 \subsection{Gradient boosting}
 \label{sec:gb}
 
-El \emph{gradient boosting} también combina árboles, pero de forma \textbf{secuencial} en vez de
-paralela. En lugar de promediar árboles independientes, construye el modelo por etapas: empieza con una
-predicción sencilla y, en cada etapa, añade un árbol nuevo entrenado para corregir el error que dejan
-los anteriores. Ese error a corregir es el gradiente de la función de pérdida, de ahí el nombre. El
-modelo tras $m$ etapas es la suma del anterior más el árbol nuevo,
+El \emph{gradient boosting} \cite{friedman2001gbm} también combina árboles, pero de forma
+\textbf{secuencial} en vez de paralela. En lugar de promediar árboles independientes que votan a la
+vez, construye el modelo por etapas, al modo de un estudiante que resuelve un problema, mira en qué se
+equivocó y dedica el siguiente intento a corregir justo esos fallos. Empieza con una predicción
+sencilla y, en cada etapa, añade un árbol nuevo entrenado para reducir el error que dejan los
+anteriores. Ese error a corregir es el gradiente de la función de pérdida evaluado en las predicciones
+actuales, de ahí el nombre del método. El modelo tras $m$ etapas es la suma del anterior más el árbol
+nuevo,
 \begin{equation}
 F_m(x) = F_{m-1}(x) + \nu\, h_m(x),
+\label{eq:boosting}
 \end{equation}
-donde $h_m$ es el árbol de la etapa $m$ y $\nu\in(0,1]$ es la \emph{tasa de aprendizaje}, que modera
-cuánto contribuye cada árbol. Una tasa pequeña avanza despacio pero generaliza mejor; una grande, o
-demasiados árboles, sobreajustan, así que tasa y número de árboles se ajustan juntos.
+donde $h_m$ es el árbol de la etapa $m$, ajustado a los gradientes que deja $F_{m-1}$, y $\nu\in(0,1]$
+es la \emph{tasa de aprendizaje}, que modera cuánto contribuye cada árbol. Una tasa pequeña avanza
+despacio pero generaliza mejor; una grande, o demasiados árboles, sobreajustan, así que tasa y número
+de árboles se ajustan juntos.
 
 La diferencia con el bosque aleatorio es de fondo. El bosque promedia árboles independientes para
 reducir la \emph{varianza}, partiendo de árboles que ya de por sí aciertan; el boosting encadena
 árboles dependientes, cada uno atacando lo que el anterior no supo, para reducir el \emph{sesgo},
 partiendo de un modelo débil que va mejorando. Eso suele dar mayor precisión, a cambio de un ajuste más
-delicado y más lento. \textbf{XGBoost} es una implementación eficiente y regularizada de esta idea, muy
-usada en la práctica, y es el clasificador que mejor rinde en el caso práctico.
+delicado y más lento. \textbf{XGBoost} \cite{chen2016xgboost} es una implementación eficiente y
+regularizada de esta idea, referencia habitual en problemas sobre datos tabulares y uno de los cinco
+clasificadores que compararemos.
 
 \begin{itemize}
 \item \textbf{Ventajas:} suele ofrecer la mayor precisión de los modelos clásicos sobre datos
@@ -676,4 +907,8 @@ tabulares y maneja bien las interacciones entre variables.
 su riesgo de sobreajuste es mayor si no se regula con cuidado.
 \end{itemize}
 
+\bibliographystyle{plain}
+\bibliography{referencias}
+
 \end{document}
+

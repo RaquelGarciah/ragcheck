@@ -37,6 +37,27 @@ método que van al marco teórico (o que la autora no repetirá allí, pero pref
 
 ---
 
+## Citadas AHORA en el marco teórico (`marco_teorico.tex`)
+
+Tras pasar el marco teórico por los agentes de redacción (`redactor-tesis` + `experto-citas`), cada
+método y cada definición no original llevan cita. Las «definiciones de método» que el tutor mandó
+traer al marco teórico ya están fundadas y citadas aquí. Claves usadas en el capítulo:
+
+- Métodos ya en `.bib`: `cox1958logreg` (logreg), `cover1967knn` (KNN), `breiman2001rf` (Random
+  Forest), `friedman2001gbm` + `chen2016xgboost` (gradient boosting / XGBoost), `salton1988tfidf`
+  (TF-IDF), `deerwester1990lsa` + `halko2011svd` (LSA/SVD), `fawcett2006roc` (ROC/AUC),
+  `guyon2002rfe` + `guyon2003selection` (RFE / selección).
+- Entradas nuevas añadidas al `.bib` (verificadas en web con DOI/ISBN por `experto-citas`):
+  `mitchell1997ml` (ML general), `geman1992biasvariance` (sesgo–varianza), `wolpert1996nfl` (no free
+  lunch), `aggarwal2012textmining` (minería de textos), `harris1954distributional` (bolsa de
+  palabras), `hanley1982roc` (AUC ↔ Mann–Whitney), `youden1950index` (índice de Youden),
+  `stone1974crossval` (validación cruzada), `cauchy1847gradient` (descenso de gradiente),
+  `shannon1948entropy` (entropía), `breiman1984cart` + `quinlan1986id3` (árboles de decisión).
+- Corrección de atribución: el árbol de decisión se cita con `breiman1984cart` (CART) y
+  `quinlan1986id3` (ID3), no con `breiman2001rf` (que queda solo para Random Forest).
+
+---
+
 ## En `referencias.bib` pero NO citadas en este capítulo (reserva)
 
 Disponibles por si una afirmación las necesita (la mayoría pertenecen al marco teórico). Cada una,

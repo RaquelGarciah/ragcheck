@@ -40,7 +40,7 @@
 
 \chapter{Caso de estudio: detector de alucinaciones en RAG}
 
-El propósito de este capítulo es aplicar las técnicas y modelos descritos previamente con el objetivo de construir un detector de alucinaciones para sistemas RAG usando machine learning clásico además de presentar y comparar los resultados con los obtenidos mediante técnicas más sofisticadas y costosas computacionalmente. 
+El propósito de este capítulo es aplicar las técnicas y modelos descritos previamente con el objetivo de construir un detector de alucinaciones para sistemas RAG usando \emph{machine learning} clásico además de presentar y comparar los resultados con los obtenidos mediante técnicas más sofisticadas y costosas computacionalmente. 
 
 Un sistema RAG responde a una consulta en dos fases:
 \begin{itemize}
@@ -81,7 +81,7 @@ Así, nuestro objetivo es construir un clasificador que, dado el par (respuesta,
 % ###########################################################################
 \section{Presentación de la base de datos}
 
-Primero presentamos con detalle la base de datos que utilizaremos en la experimentación. Trabajamos con la versión ya procesada de RAGTruth, una base de datos creada por Niu et al.\ en 2024 \cite{niu2024ragtruth} que consta de 17.790 respuestas de LLMs etiquetadas por humanos a nivel de tramo según contengan o no alucinaciones. Dichas respuestas fueron generadas por seis modelos distintos (GPT-4, GPT-3.5-turbo, Llama-2-7B/13B/70B y Mistral-7B) sobre 2.965 prompts y cubren tres tareas de distinta naturaleza:
+Primero presentamos con detalle la base de datos que utilizaremos en la experimentación. Trabajamos con la versión ya procesada de RAGTruth, una base de datos creada por Niu et al.\ en 2024 \cite{niu2024ragtruth} que consta de 17.790 respuestas de LLMs etiquetadas por humanos a nivel de tramo según contengan o no alucinaciones. Dichas respuestas fueron generadas por seis modelos distintos (GPT-4, GPT-3.5-turbo, Llama-2-7B/13B/70B y Mistral-7B) sobre 2.965 \emph{prompts} y cubren tres tareas de distinta naturaleza:
 
 \begin{itemize}
   \item \textbf{QA}: dada una pregunta el modelo redacta una respuesta. La fuente es texto en prosa.
@@ -144,7 +144,7 @@ Summary & gpt-4 & \emph{«Seventy years ago, Anne Frank died of typhus in a Nazi
 
 \subsection{Descriptivo y caracterización de las alucinaciones}
 
-Con el objetivo de entender mejor el problema, necesitamos primero entender los datos. Qué aspecto tiene una alucinación, con qué frecuencia aparece, de qué tipo suelen ser y si es más propensa a inventar unas cosas que otras. La Figura~\ref{fig:eda-global} muestra que en general las respuestas tienen en su mayoría alrededor de 100 tokens y las tres tareas se reparten de forma equivalente entre entrenamiento y
+Con el objetivo de entender mejor el problema, necesitamos primero entender los datos: qué aspecto tiene una alucinación, con qué frecuencia aparece, de qué tipo suelen ser y si es más propensa a inventar unas cosas que otras. La Figura~\ref{fig:eda-global} muestra que en general las respuestas tienen en su mayoría alrededor de 100 \emph{tokens} y las tres tareas se reparten de forma equivalente entre entrenamiento y
 test. Esto es importante porque le da al modelo una aplicación de carácter general, es decir, el modelo no estará entrenado solo para una longitud de respuesta, un tipo de tarea o un modelo concreto.
 
 \begin{figure}[H]
@@ -213,8 +213,8 @@ tipo de alucinación se recoge en la Figura~\ref{fig:tipos}. En Summary el $86\,
 \label{fig:tipos}
 \end{figure}
 
-Cuatro de cada diez alucinaciones son una entidad numérica, temporal o nombre propio según Figura~\ref{fig:anatomia}(a). Los 
-tramo alucinados son cortos, la mayoría no pasa de ocho tokens según la (Figura~\ref{fig:anatomia}b).
+Cuatro de cada diez alucinaciones son una entidad numérica, temporal o nombre propio según la Figura~\ref{fig:anatomia}(a). Los
+tramos alucinados son cortos, la mayoría no pasa de ocho \emph{tokens} (Figura~\ref{fig:anatomia}b).
 Esta división es clave para guiar el diseño de características. La parte numérica y temporal tendrá que ser cubierta por variables relacionadas con el solape de números y unidades entre respuesta y fuente, mientras que el texto libre necesitará medidas más orientadas al solape léxico.
 
 \begin{figure}[H]
@@ -255,18 +255,39 @@ clásico la marca por pertenencia a conjuntos
 \draw[->] (resp.east) -- (llm.west);
 \draw[->] (src.east) -- (clf.west);
 \end{tikzpicture}
-\caption{Detector basado en machine learning clásico vs LLM aplicado a la misma respuesta. ($4{,}5\notin F$).}
+\caption{Detector basado en \emph{machine learning} clásico frente a LLM aplicado a la misma respuesta. ($4{,}5\notin F$).}
 \label{fig:ejemplo-esquema}
 \end{figure}
 
+% ###########################################################################
+\section{Software utilizado}
+
+Los datos provienen del corpus RAGTruth ya presentado, descargado de la plataforma \emph{Hugging
+Face}\footnote{\url{https://huggingface.co/datasets/wandb/RAGTruth-processed}}. La experimentación se
+ha realizado en \emph{Python} 3.12. El código se organiza como una librería instalable de elaboración
+propia, \tc{ragcheck}, disponible en un repositorio público de GitHub. Todo el flujo es determinista
+—semilla fija ($42$) en \tc{numpy}, \tc{scikit-learn} y \tc{xgboost}—, de modo que el mismo código y
+los mismos datos producen siempre el mismo resultado.
+
+\begin{itemize}
+\item \textbf{Librerías.} El tratamiento de datos y los modelos se apoyan en librerías estándar de
+\emph{machine learning}: \tc{pandas} y \tc{numpy} para la manipulación de datos, \tc{scikit-learn} y
+\tc{xgboost} para los clasificadores, \tc{matplotlib} y \tc{seaborn} para las figuras, y \tc{spaCy}
+para el descriptivo de entidades.
+\item \textbf{Scripts.} Cada tarea tiene su script atómico: \tc{visualization.py} y
+\tc{spans\_analysis.py} para el descriptivo; \tc{log\_reg.py}, \tc{knn.py},
+\tc{random\_forest.py} y \tc{xgb.py} para entrenar y optimizar cada clasificador; y
+\tc{compare\_models.py} para la tabla comparativa final.
+\end{itemize}
 
 % ###########################################################################
-% 3. FEATURE ENGINEERING
-% ###########################################################################
-\section{Ingeniería de características}
+\section{Procesamiento de datos}
 \label{sec:fe}
-Dado que los datos a trabajar están en formato de texto, el primer paso es transformar cada par (contexto, output) en un vector numérico de características que capturen indicios de alucinación. Primero se lleva a cabo un preprocesado, a continuación definimos las características candidatas,
-comprobamos si separan bien las clases alucina (1), limpia (0) y finalmente seleccionamos el subconjunto óptimo con un método de selección de características.
+
+Los datos de partida son texto, así que el primer paso es transformar cada par (contexto, salida) en
+un vector numérico de características que capturen indicios de alucinación. Se aplica primero un
+preprocesado y después se definen las características candidatas; su exploración y selección se abordan
+en la metodología.
 
 \subsection{Preprocesado: tokenización}
 
@@ -322,7 +343,9 @@ Se construyen dieciocho características candidatas (Cuadro~\ref{tab:feats}), ag
   \tc{task\_*} & one-hot de la tarea (QA/Summary/Data2txt) & especialización por tarea \\
   \bottomrule
   \end{tabular}
-  \caption{Las dieciocho características candidatas.}
+  \caption{Las dieciocho características candidatas. Las filas \tc{sent\_cont\_*}, \tc{sent\_sim\_*} y
+  \tc{task\_*} agrupan varias columnas (los agregados por frase y las tres indicadoras de tarea), de
+  modo que las doce filas de la tabla suman dieciocho variables.}
   \label{tab:feats}
   \end{table}
 
@@ -356,7 +379,7 @@ mucho. Mide similitud distribucional, no solo solape de conjuntos.
 \begin{equation}
 \text{num\_overlap} = \frac{|N_R \cap N_F|}{|N_R|}\quad(=1 \text{ si } N_R=\varnothing),
 \end{equation}
-con $N_R, N_F$ los conjuntos de números de respuesta y fuente. Caza fechas y cifras
+con $N_R, N_F$ los conjuntos de números de respuesta y fuente. Identifica fechas y cifras
 inventadas; si la respuesta no tiene números, no hay nada que pueda estar sin respaldo y
 vale $1$.
 
@@ -365,30 +388,53 @@ palabras de la respuesta (con repeticiones). Aunque no indica alucinación por s
 contextualizar a las demás, por ejemplo, un containment de $0{,}8$ no significa lo mismo en 3 palabras que
 en 40.
 
+% ###########################################################################
+\section{Metodología de modelización analítica}
+\label{sec:metodologia}
 
-\subsection{Separabilidad de clases y correlación de variables}
+La modelización sigue la metodología SEMMA descrita en el marco teórico, aplicada a las variables
+construidas en el procesamiento de datos. El flujo va del dato preparado a la evaluación en el test
+(Figura~\ref{fig:pipeline}): se exploran las variables, se fijan las muestras, se depuran y
+seleccionan, se ajustan los modelos y se valoran sus resultados.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{concept_pipeline}
+\caption{Flujo de trabajo: del dato en crudo a la evaluación en el test.}
+\label{fig:pipeline}
+\end{figure}
+
+\subsection{Análisis exploratorio}
 \label{sec:corr}
 
-Los modelos de machine learning ponderan más las variables que más información explican y descartan el resto. Un número elevado de variables redundantes solo añade ruido, por eso, antes de seleccionar se comprueban dos cosas: si las características discriminan y cuánta
-información independiente aportan. 
-Para el primer punto estudiamos la distribución de
-cada característica continua separada por la variable objetivo. En variables como
-\tc{containment}, \tc{jaccard} o \tc{num\_context} la clase alucinada se desplaza hacia
-menos solape, como se aprecia en la Figura~\ref{fig:sep}.
+Los modelos de \emph{machine learning} ponderan más las variables que más información explican y descartan el resto. Un número elevado de variables redundantes solo añade ruido, por eso, antes de seleccionar se comprueban dos cosas: si las características discriminan y cuánta
+información independiente aportan.
+Para el primer punto estudiamos la distribución, separada por la variable objetivo, de las quince
+características continuas; las tres indicadoras de tarea (\tc{task\_*}) son binarias y quedan fuera de
+este análisis. En variables como \tc{containment}, \tc{jaccard} o \tc{num\_context} la clase alucinada
+se desplaza hacia menos solape, como se aprecia en la Figura~\ref{fig:sep}.
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=\figw]{eda_separabilidad_features}
-  \caption{Distribución de cada característica continua separada por clase.}
+  \caption{Distribución de cada una de las quince características continuas, separada por clase.}
   \label{fig:sep}
   \end{figure}
 
-Discriminar no es suficiente: dos características muy correlacionadas dicen lo mismo. La
-Figura~\ref{fig:corr} muestra la correlación de Spearman entre las dieciocho. El bloque de solape
-léxico está muy correlacionado ($|\rho|>0{,}8$). \tc{containment} correlaciona con
-\tc{tfidf\_cos}, \tc{sent\_cont\_mean}, \tc{sent\_sim\_mean}, \tc{novel\_bigram} y
-\tc{novel\_trigram}, y estas dos últimas son casi el negativo exacto de \tc{containment}.
-Lo que nos sugiere que sobran variables y las dieciocho carácterísticas aportan información en cuatro ejes ortogonales distintos:
+Además de discriminar, interesa saber cuánta información independiente aporta cada variable. A
+continuación se realiza un análisis de correlación entre las variables con el coeficiente de Spearman,
+elegido por medir asociaciones monótonas —no solo lineales— y por su robustez frente a los valores
+atípicos, que en nuestras características son frecuentes (respuestas muy largas o solapes extremos). La
+Figura~\ref{fig:corr} resume las correlaciones entre las dieciocho variables: el bloque de solape
+léxico está muy correlacionado ($|\rho|>0{,}8$); \tc{containment} correlaciona con \tc{tfidf\_cos},
+\tc{sent\_cont\_mean}, \tc{sent\_sim\_mean}, \tc{novel\_bigram} y \tc{novel\_trigram}, y estas dos
+últimas son casi su negativo exacto.
+
+Conviene matizar el alcance de esta redundancia. La correlación entre variables predictoras
+(multicolinealidad) afecta a la interpretación de los coeficientes de la regresión, no a la capacidad
+predictiva de los modelos; reducir el número de variables, por tanto, no persigue mejores predicciones,
+sino un modelo más simple e interpretable. Con ese criterio, las dieciocho variables se agrupan en
+cuatro ejes de información prácticamente independientes:
 
 \begin{enumerate}
   \item \textbf{Soporte léxico}: containment, jaccard, tfidf\_cos, novedad de $n$-gramas,
@@ -406,7 +452,32 @@ Lo que nos sugiere que sobran variables y las dieciocho carácterísticas aporta
 \label{fig:corr}
 \end{figure}
 
-\subsection{Selección de variables mediante Recursive Feature Elimination}
+\subsection{Muestreo}
+
+Partimos de la división oficial de RAGTruth en dos bloques: \textbf{entrenamiento} ($15\,090$
+respuestas), sobre el que se ajustan características, hiperparámetros y umbral con validación cruzada
+interna, y \textbf{test} ($2\,700$ respuestas), reservado para la evaluación final. Seguir la
+partición oficial permite comparar con la literatura sobre el mismo test, y evaluar una sola vez evita
+el sobreajuste por iteración.
+
+Frente al desbalance de clases no aplicamos remuestreo (sobremuestreo ni submuestreo): en su lugar
+ponderamos las clases en el entrenamiento (\tc{class\_weight}) y ajustamos el umbral de decisión, que
+la valoración desarrolla. Reservada la partición, queda evitar que los resultados dependan de un corte
+concreto del entrenamiento.
+
+Para que los resultados no dependan de una única partición usamos validación cruzada de $k=6$
+iteraciones. En nuestra base varias respuestas comparten el mismo documento como fuente, así que
+aplicamos \emph{GroupKFold} agrupando por \tc{source}: cada documento cae entero en un solo bloque y
+ninguno aparece a la vez en entrenamiento y validación. Un \emph{KFold} aleatorio filtraría
+información entre bloques e inflaría el resultado.
+
+\subsection{Manipulación de datos}
+
+La fase de modificación depura las variables y reduce su número. Nuestras características son medidas
+léxicas y numéricas siempre definidas, así que no hay valores ausentes que imputar; los valores
+atípicos (respuestas muy largas o solapes extremos) se conservan, pues son informativos y no afectan a
+los modelos de árbol. El grueso de esta fase es, por tanto, la selección de variables.
+
 \label{sec:rfe}
 \subsubsection{Métodos de selección: filtro y envolvente}
 Los métodos de selección de características se dividen en dos grandes familias
@@ -471,197 +542,32 @@ El conjunto es interpretable y respeta los ejes de la sección~\ref{sec:corr}:
 \tc{containment} domina (el eje de soporte léxico); le acompañan la consistencia numérica
 (\tc{num\_context}, \tc{num\_overlap}), la recombinación (\tc{novel\_bigram}), el soporte
 por frase (\tc{sent\_cont\_min}, \tc{sent\_sim\_min}), la longitud, y la codificación por
-tarea.  La Figura~\ref{fig:selstudy} muestra la separabilidad por clase y la correlación
-de Spearman del conjunto final: la señal por clase se mantiene y la redundancia ha bajado
-respecto a las dieciocho características iniciales. 
+tarea. Frente a las dieciocho iniciales, el conjunto conserva la señal por clase y reduce la
+redundancia.
 
 Estas serán las variables sobre las que se basará todo el estudio posterior.
 
-\begin{figure}[H]
-\centering
-\begin{subfigure}{0.62\textwidth}\includegraphics[width=\textwidth]{feat_sel_separabilidad}\caption{Separabilidad por clase.}\end{subfigure}\hfill
-\begin{subfigure}{0.36\textwidth}\includegraphics[width=\textwidth]{feat_sel_correlacion}\caption{Correlación de Spearman.}\end{subfigure}
-\caption{Descriptivo del conjunto final de variables.}
-\label{fig:selstudy}
-\end{figure}
+\subsection{Modelización}
 
-% ###########################################################################
-% 4. METODOLOGÍA
-% ###########################################################################
-\section{Metodología de entrenamiento y validación}
+Los hiperparámetros de cada modelo se eligen por búsqueda en rejilla: se define una rejilla de
+combinaciones, se evalúa cada una por validación cruzada \emph{GroupKFold} sobre entrenamiento y
+validación, y se conserva la de mayor F1. El coste es multiplicativo: optimizar tres hiperparámetros
+con cuatro valores cada uno y seis \emph{folds} exige $4\cdot4\cdot4\cdot6=384$ ajustes del modelo,
+asumible en CPU para modelos clásicos y una de las ventajas frente a las redes profundas, donde cada
+ajuste cuesta horas de GPU.
 
-Esta sección describe el flujo de trabajo desde la base de datos en crudo hasta la evaluación final. El siguiente esquema muestra el procedimiento seguido.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=\textwidth]{concept_pipeline}
-\caption{Flujo de trabajo: del dato en crudo a la evaluación en el test.}
-\label{fig:pipeline}
-\end{figure}
-
-
-Para empezar partimos la base en los dos bloques:
-\begin{itemize}
-  \item \textbf{Entrenamiento} ($15\,090$ respuestas): subconjunto sobre el que se ajustan las
-        características, los hiperparámetros y el umbral, con validación cruzada interna.
-  \item \textbf{Test} ($2\,700$ respuestas): subconjunto reservado para la evaluación final.
-\end{itemize}
-
-Seguir la partición natural de RAGTruth nos permite comparar con el estado del arte sobre el mismo test, y
-evaluarlo una sola vez evita el sobreajuste por iteración, un riesgo al probar muchas
-configuraciones. Sin embargo, reservar el test no es suficiente. Al entrenar y validar sobre el
-mismo bloque surgen tres problemas que abordamos en el resto de la sección:
-\begin{itemize}
-  \item Los resultados dependen de las particiones en el entrenamiento.
-  \item Los hiperparámetros pueden ajustarse a una partición concreta.
-  \item El desbalance de clases cambia de una tarea a otra.
-\end{itemize}
-A continuación trataremos cada problema por separado.
-
-\subsection{Problema 1: dependencia resultados-partición}
-\label{sec:gkf}
-
-Para no depender de una única partición se usa validación cruzada: en lugar de un solo corte
-entrenamiento-validación, se divide el entrenamiento en $k$ partes (\emph{folds}) y se repite
-el ajuste $k$ veces, dejando cada vez una parte como validación y las otras $k-1$ como
-entrenamiento. La métrica final será la media de las $k$ iteraciones, más estable que la de un
-único corte. Usaremos $k=6$.
-
-En nuestra base de datos, además, varias respuestas comparten el mismo documento como fuente, y si un documento
-aparece a la vez en entrenamiento y validación el modelo memoriza en lugar de generalizar e
-infla el resultado. Por eso se agrupa por \tc{source} con \emph{GroupKFold}: cada documento
-cae entero en un solo fold (Figura~\ref{fig:gkf}), sin repartirse entre entrenamiento y
-validación. Un KFold aleatorio, en cambio, filtraría información entre folds.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.72\textwidth]{concept_groupkfold}
-\caption{GroupKFold por documento: cada \tc{source} cae entero en un fold, sin fuga entre
-entrenamiento y validación.}
-\label{fig:gkf}
-\end{figure}
-
-\subsection{Problema 2: dependencia hiperparámetros-entrenamiento}
-
-Los modelos con hiperparámetros pueden sobreajustarlos. Para no caer en el \emph{overfitting} los elegimos usando \emph{grid
-search}: se define una rejilla de combinaciones de hiperparámetros, se evalúa cada una por
-validación cruzada GroupKFold sin tocar el test y se conserva la que mejor resultado da, en nuestro caso, la combinación con mejor F1.(Figura~\ref{fig:grid}). 
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.6\textwidth]{concept_gridsearch}
-\caption{Búsqueda en rejilla: cada celda es una combinación de hiperparámetros, evaluada por la
-media de F1 de seis folds; se elige la de mayor F1 de validación.}
-\label{fig:grid}
-\end{figure}
-
-El coste es multiplicativo: optimizar tres hiperparámetros con cuatro valores cada uno y seis
-folds exige $4\cdot4\cdot4\cdot6=384$ ajustes del modelo. Ese coste, asumible en CPU para
-modelos clásicos, es una de las ventajas del enfoque frente a las redes profundas,
-donde cada ajuste cuesta horas de GPU.
-
-\subsection{Problema 3: desbalance y umbral de decisión}
-\label{sec:desb-trat}
-
-El tercer problema es propio del desbalance de nuestra base. El modelo produce un \emph{score} continuo por
-respuesta, y el \textbf{umbral} es el corte que lo convierte en decisión: se considera alucinación si el score lo supera. Moverlo desliza el trade-off entre precisión y exhaustividad, bajarlo caza más alucinaciones a
-costa de más falsas alarmas (Figura~\ref{fig:umbral-esq}a). Como la prevalencia de alucinaciones difiere por tarea, el corte óptimo es distinto en cada una: donde la alucinación es rara
-(QA, Summary) conviene bajar el umbral para no dejarla pasar (Figura~\ref{fig:umbral-esq}b).
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=\textwidth]{concept_umbral}
-\caption{(a) El umbral separa las dos clases sobre el score; moverlo intercambia falsos negativos
-por falsos positivos. (b) Cada tarea opera a una prevalencia distinta, así que su corte óptimo
-también es distinto.}
-\label{fig:umbral-esq}
-\end{figure}
-
-La Figura~\ref{fig:umbral} compara tres criterios para fijar el umbral, todos ajustados en entrenamiento y aplicados al test: el índice de Youden global, el máximo de F1 por tarea y el máximo de $F_2$ por tarea. Si fijamos el umbral por tarea recuperamos falsos
-negativos que el umbral global deja pasar, a costa de perder precisión. Pasamos de 285 falsos negativos a 125.
-
-\begin{figure}[H]
-\centering
-\begin{subfigure}{0.49\textwidth}\includegraphics[width=\textwidth]{desb_barrido_umbral}\caption{Métricas frente al umbral (OOF).}\end{subfigure}\hfill
-\begin{subfigure}{0.49\textwidth}\includegraphics[width=\textwidth]{desb_estrategias_umbral}\caption{Estrategias de umbral por tarea (test).}\end{subfigure}
-\caption{Efecto del umbral de decisión. Precisión, recall y F1 al mover el
-umbral (a). Las tres estrategias de umbral por tarea sobre el test (b).}
-\label{fig:umbral}
-\end{figure}
-
-% ###########################################################################
-% 5. MARCO DE TRABAJO
-% ###########################################################################
-\section{Marco de trabajo}
-
-La experimentación se organiza en torno a los siguientes recursos:
-\begin{itemize}
-  \item \textbf{Base de datos.} Descargamos la base desde Hugging Face, una
-plataforma que aloja bases de datos y modelos abiertos para machine learning, mediante este enlace https://huggingface.co/datasets/wandb/RAGTruth-processed. La fuente original es el corpus RAGTruth~\cite{niu2024ragtruth}, un
-conjunto de respuestas de modelos de lenguaje anotadas por humanos a nivel de tramo según
-contengan o no alucinaciones.
-
-\item \textbf{Reentrenamiento y evaluación.} Se ha utilizado Python 3.12. El código se organiza como
-una librería instalable de elaboración propia, \tc{ragcheck}, disponible en mi repositorio
-público de GitHub (TODAVIA NO LO HE SUBIDO). Se apoya en los
-siguientes scripts:
-\begin{itemize}
-  \item \tc{visualization.py}: elabora los gráficos que ofrecen una visión general de la base
-        de datos.
-  \item \tc{spans\_analysis.py}: descriptivo de los tramos alucinados (tipo, entidad, longitud).
-  \item \tc{log\_reg.py}: entrena y optimiza el clasificador de regresión logística y evalúa sus
-        resultados.
-  \item \tc{knn.py}: entrena y optimiza el clasificador KNN y evalúa sus resultados.
-  \item \tc{svm.py}: entrena y optimiza la máquina de vectores soporte y evalúa sus resultados.
-  \item \tc{random\_forest.py}: entrena y optimiza el bosque aleatorio y evalúa sus resultados.
-  \item \tc{xgb.py}: entrena y optimiza el clasificador XGBoost y evalúa sus resultados.
-  \item \tc{compare\_models.py}: reúne los cinco clasificadores en la tabla comparativa final.
-\end{itemize}
-
-\item \textbf{Librerías y reproducibilidad.} Todos los scripts usan librerías de Python populares en
-machine learning: \tc{pandas}, \tc{numpy}, \tc{scikit-learn}, \tc{xgboost}, \tc{matplotlib} y
-\tc{seaborn}, más \tc{spaCy} para el descriptivo de entidades. El trabajo es determinista para poder ser reproducido:
-semilla fija ($42$) en \tc{numpy}, \tc{scikit-learn} y \tc{xgboost}, de modo que el mismo código
-y los mismos datos producen siempre el mismo resultado.
-\end{itemize}
-
-% 
-
-% ###########################################################################
-% 6. RESULTADOS
-% ###########################################################################
-\section{Resultados}
-
-\subsection{Resultados por modelo}
-
-El propósito de esta sección es presentar los resultados que consigue cada clasificador
-clásico sobre el conjunto final de once variables. Para todos se sigue el mismo procedimiento:
-
-\begin{itemize}
-\item se describe el algoritmo y se enumeran sus hiperparámetros, indicando los valores que
-tomará cada uno en la búsqueda.
-\item esos hiperparámetros se optimizan por búsqueda en rejilla (\emph{grid search}) con
-validación cruzada GroupKFold de seis iteraciones por \tc{source}; el valor F1 de cada
-combinación es la media sobre los seis pliegues, y se elige la de mayor media.
-\item con la mejor combinación se reentrena el modelo y se evalúa una sola vez sobre el test, fijando el umbral de decisión por el índice de Youden (el umbral que maximiza la
-suma de sensibilidad y especificidad).
-\item se reportan precisión, exhaustividad (recall), F1, accuracy y AUC, y se muestra la
-curva ROC.
-\end{itemize}
-
-Las curvas ROC y precisión-recall de los cinco modelos superpuestas aparecen al final de la sección en la
-Figura~\ref{fig:roc-all}.
+Para cada clasificador se enumeran sus hiperparámetros, con los valores que toma cada uno en la
+búsqueda, y se optimizan por búsqueda en rejilla con validación cruzada \emph{GroupKFold} de seis
+iteraciones por \tc{source}: el F1 de cada combinación es la media sobre los seis pliegues, y se
+conserva la de mayor media. El rendimiento de los modelos ajustados sobre el test se presenta en la
+valoración.
 
 \newcommand{\rocw}{0.42\textwidth}
 
 \subsubsection{Regresión logística}
 
-La regresión logística modela la probabilidad de alucinación aplicando la función sigmoide
-$\sigma(z)=1/(1+e^{-z})$ a una combinación lineal de las once características.
-Es el modelo más interpretable de todos, ya que cada coeficiente es el
-peso, con su signo, de una característica, y también el más barato de entrenar; su límite es
-que solo puede trazar fronteras de decisión lineales. Se ajustan tres hiperparámetros (con el
-solucionador fijado en \tc{liblinear}, que admite las dos penalizaciones):
+La regresión logística, clasificador lineal de referencia, se ajusta con tres hiperparámetros; el
+solucionador se fija en \tc{liblinear}, que admite las dos penalizaciones:
 
 \begin{itemize}
 \item \tc{C}: cuanto menor es \tc{C}, más se
@@ -682,12 +588,8 @@ sobreajuste. Se prueban los valores $0{,}01$, $0{,}1$, $1$, $10$ y $100$.
 \end{itemize}
 
 En validación cruzada, la mejor combinación es \tc{C}${}=0{,}01$,
-\tc{penalty}${}=$\tc{l2} y \tc{class\_weight}${}=$\tc{balanced} (Cuadro~\ref{tab:grid-lr}); lo
-que marca la diferencia no es el valor de \tc{C} ni la penalización, sino activar el
-reponderado de clases. Aplicando esa configuración sobre el test se obtienen los resultados del
-Cuadro~\ref{tab:met-lr}. Es el modelo más débil: su AUC ($0{,}798$) es el
-único que no llega a $0{,}80$, coherente con que solo puede trazar fronteras lineales.
 
+En validación cruzada, la mejor combinación es \tc{C}${}=0{,}01$, \tc{penalty}${}=$\tc{l2} y \tc{class\_weight}${}=$\tc{balanced} (Cuadro~\ref{tab:grid-lr}); lo que marca la diferencia no es el valor de \tc{C} ni la penalización, sino activar el reponderado de clases.
 
 \begin{table}[H]
 \centering\footnotesize
@@ -722,31 +624,10 @@ logística.}
 \label{tab:grid-lr}
 \end{table}
 
-\begin{table}[H]
-\centering\small
-\begin{tabular}{lc}
-\toprule
-Regresión logística & \\
-\midrule
-Precisión & 0,594 \\
-Exhaustividad (recall) & 0,726 \\
-Valor F1 & 0,654 \\
-Accuracy & 0,731 \\
-AUC & 0,798 \\
-\bottomrule
-\end{tabular}
-\caption{Precisión, exhaustividad, F1 y AUC de la regresión logística en el test.}
-\label{tab:met-lr}
-\end{table}
-
-
 \subsubsection{K vecinos más cercanos (KNN)}
 
-El algoritmo de los $k$ vecinos más cercanos clasifica cada respuesta según la clase
-mayoritaria entre las $k$ del entrenamiento más parecidas a ella. No
-asume ninguna forma para la frontera de decisión, pero es sensible a la escala de las
-características, por eso se estandarizan antes, y su inferencia es costosa, ya que guarda todo
-el conjunto de entrenamiento. Se ajustan tres hiperparámetros:
+El clasificador de los $k$ vecinos más cercanos se ajusta con tres hiperparámetros; las
+características se estandarizan antes, por su sensibilidad a la escala:
 
 \begin{itemize}
 \item \tc{n\_neighbors} ($k$): número de vecinos que se consultan para decidir la clase. Un
@@ -765,11 +646,7 @@ los valores $3$, $5$, $11$, $15$ y $25$.
   \end{itemize}
 \end{itemize}
 
-La rejilla elige $k=25$, distancia
-\tc{Manhattan} ($p=1$) y ponderación por distancia; la distancia Manhattan supera a la
-euclídea de forma sistemática, y el rendimiento se satura a partir de $k\approx15$. Sobre el
-test separa razonablemente bien
-(AUC $0{,}826$), aunque no destaca en precisión ni en recall.
+La rejilla elige $k=25$, distancia \tc{Manhattan} ($p=1$) y ponderación por distancia (Cuadro~\ref{tab:grid-knn}); la distancia Manhattan supera a la euclídea de forma sistemática, y el rendimiento se satura a partir de $k\approx15$.
 
 \begin{table}[H]
 \centering\footnotesize
@@ -803,107 +680,10 @@ $k$ & \tc{p} & \tc{weights} & F1 (CV) \\
 \label{tab:grid-knn}
 \end{table}
 
-\begin{table}[H]
-\centering\small
-\begin{tabular}{lc}
-\toprule
-KNN & \\
-\midrule
-Precisión & 0,646 \\
-Exhaustividad (recall) & 0,695 \\
-Valor F1 & 0,669 \\
-Accuracy & 0,760 \\
-AUC & 0,826 \\
-\bottomrule
-\end{tabular}
-\caption{Precisión, exhaustividad, F1 y AUC de KNN en el test.}
-\label{tab:met-knn}
-\end{table}
-
-
-\subsubsection{Máquina de vectores de soporte (SVM)}
-
-La máquina de vectores de soporte busca la frontera que separa las dos clases con el mayor
-margen posible. Con un núcleo de base radial (RBF) esa frontera puede ser no lineal, porque el
-núcleo proyecta las características a un espacio de mayor dimensión. Da
-buenas fronteras curvas con control del sobreajuste, dice de qué lado del margen cae un nuevo registro, pero no una probabilidad, para obtenerla se calibra aparte con Platt scaling, un ajuste por validación cruzada y su coste crece con el cuadrado del número de ejemplos, por lo
-que la búsqueda de hiperparámetros se hace sobre una submuestra. Las características se
-estandarizan antes porque la sensibilidad del modelo a las distancias. Se ajustan tres hiperparámetros:
-
-\begin{itemize}
-\item \tc{C}: regula el compromiso entre un margen ancho y clasificar bien el entrenamiento.
-Un \tc{C} pequeño tolera más errores (margen ancho, modelo más simple). Uno grande penaliza
-cada error (margen estrecho). Se prueban los valores $0{,}1$, $1$, $10$ y $100$.
-\item \tc{gamma}: anchura del núcleo RBF, es decir, hasta qué distancia influye cada ejemplo.
-  \begin{itemize}
-  \item \tc{scale}: usa $1/(n_\text{car}\cdot \operatorname{Var}(X))$, que tiene en cuenta la
-  dispersión de los datos.
-  \item \tc{auto}: usa $1/n_\text{car}$.
-  \end{itemize}
-\item \tc{class\_weight}: \tc{None} (clases al mismo peso) o \tc{balanced} (la clase
-minoritaria pesa más), para compensar el desbalance como en la regresión logística.
-\end{itemize}
-
-El mejor punto de la rejilla es \tc{C}${}=10$,
-\tc{gamma}${}=$\tc{scale} y \tc{class\_weight}${}=$\tc{balanced}; \tc{gamma} no influye y, como
-en la regresión logística, el reponderado de clases es lo que ayuda. Sobre el test rinde de
-forma sólida: AUC $0{,}819$ y F1 $0{,}685$, empatado con XGBoost en F1, aunque queda tercero por
-promedio F1--AUC, tras XGBoost y el bosque aleatorio.
-
-\begin{table}[H]
-\centering\footnotesize
-\begin{tabular}{cccc}
-\toprule
-\tc{C} & \tc{gamma} & \tc{class\_weight} & F1 (CV) \\
-\midrule
-10 & scale & balanced & \textbf{0,699} \\
-10 & auto & balanced & 0,699 \\
-100 & scale & balanced & 0,696 \\
-100 & auto & balanced & 0,696 \\
-1 & scale & balanced & 0,692 \\
-1 & auto & balanced & 0,692 \\
-10 & scale & None & 0,685 \\
-10 & auto & None & 0,685 \\
-100 & scale & None & 0,682 \\
-100 & auto & None & 0,682 \\
-0,1 & scale & balanced & 0,681 \\
-0,1 & auto & balanced & 0,681 \\
-1 & scale & None & 0,675 \\
-1 & auto & None & 0,675 \\
-0,1 & scale & None & 0,672 \\
-0,1 & auto & None & 0,672 \\
-\bottomrule
-\end{tabular}
-\caption{Valores F1 (media en CV, 6 iteraciones sobre submuestra) para las 16 combinaciones de
-la SVM.}
-\label{tab:grid-svm}
-\end{table}
-
-\begin{table}[H]
-\centering\small
-\begin{tabular}{lc}
-\toprule
-SVM & \\
-\midrule
-Precisión & 0,670 \\
-Exhaustividad (recall) & 0,701 \\
-Valor F1 & 0,685 \\
-Accuracy & 0,775 \\
-AUC & 0,819 \\
-\bottomrule
-\end{tabular}
-\caption{Precisión, exhaustividad, F1 y AUC de la SVM en el test.}
-\label{tab:met-svm}
-\end{table}
-
-
 \subsubsection{Bosque aleatorio}
 
-El bosque aleatorio promedia el voto de muchos árboles de decisión, cada uno entrenado sobre
-una submuestra distinta de los datos y de las características. Es robusto,
-capta interacciones entre características y es insensible a la escala, a cambio de perder la
-interpretabilidad de un árbol único. Se fija el número de árboles en $300$, suficiente para
-que el promedio se estabilice, y se ajustan tres hiperparámetros:
+El bosque aleatorio se entrena con $300$ árboles, suficiente para que el promedio se estabilice, y se
+ajustan tres hiperparámetros:
 
 \begin{itemize}
 \item \tc{max\_depth}: profundidad máxima de cada árbol, es decir, cuántas preguntas
@@ -922,11 +702,7 @@ mayores producen hojas más pobladas y árboles más suaves, lo que regulariza. 
 $2$, $4$ y $8$.
 \end{itemize}
 
-La búsqueda se queda con profundidad máxima $20$,
-\tc{max\_features}${}=$\tc{sqrt} y \tc{min\_samples\_leaf}${}=4$, pero las $32$ combinaciones
-rinden casi igual (entre $0{,}688$ y $0{,}695$): el modelo es muy robusto a sus
-hiperparámetros. Sobre el test alcanza un AUC de $0{,}833$, de los
-más altos.
+La búsqueda se queda con profundidad máxima $20$, \tc{max\_features}${}=$\tc{sqrt} y \tc{min\_samples\_leaf}${}=4$ (Cuadro~\ref{tab:grid-rf}), pero las $32$ combinaciones rinden casi igual (entre $0{,}688$ y $0{,}695$): el modelo es muy robusto a sus hiperparámetros.
 
 \begin{table}[H]
 \centering\footnotesize
@@ -957,31 +733,10 @@ combinaciones de las $32$.}
 \label{tab:grid-rf}
 \end{table}
 
-\begin{table}[H]
-\centering\small
-\begin{tabular}{lc}
-\toprule
-Bosque aleatorio & \\
-\midrule
-Precisión & 0,656 \\
-Exhaustividad (recall) & 0,699 \\
-Valor F1 & 0,677 \\
-Accuracy & 0,767 \\
-AUC & 0,833 \\
-\bottomrule
-\end{tabular}
-\caption{Precisión, exhaustividad, F1 y AUC del bosque aleatorio en el test.}
-\label{tab:met-rf}
-\end{table}
-
-
 \subsubsection{Gradient boosting (XGBoost)}
 
-El \emph{gradient boosting} construye los árboles de forma secuencial: cada árbol nuevo se
-entrena para corregir los errores que comete la suma de los anteriores. Suele ser el mejor clasificador en datos tabulares y
-produce probabilidades bien calibradas, a cambio de tener más hiperparámetros que ajustar. Se
-fijan el número de árboles ($300$), el submuestreo ($0{,}8$) y la regularización, y se ajustan
-los dos hiperparámetros más influyentes:
+El \emph{gradient boosting} (XGBoost) se entrena con $300$ árboles y regularización fijos, y se ajustan
+los tres hiperparámetros más influyentes:
 
 \begin{itemize}
 \item \tc{max\_depth}: profundidad de cada árbol; controla la complejidad de las interacciones
@@ -994,10 +749,7 @@ Menos del total ($0{,}8$) introduce aleatoriedad y regulariza; $1{,}0$ usa todos
 $0{,}8$ y $1{,}0$.
 \end{itemize}
 
-Gana la combinación profundidad $6$, tasa de
-aprendizaje $0{,}05$ y \tc{subsample}${}=0{,}8$, pero las $32$ combinaciones rinden muy
-parecido (entre $0{,}678$ y $0{,}696$). Sobre el test obtiene el
-mejor AUC de los cinco modelos, $0{,}837$.
+Gana la combinación profundidad $6$, tasa de aprendizaje $0{,}05$ y \tc{subsample}${}=0{,}8$ (Cuadro~\ref{tab:grid-xgb}), pero las $32$ combinaciones rinden muy parecido (entre $0{,}678$ y $0{,}696$).
 
 \begin{table}[H]
 \centering\footnotesize
@@ -1028,6 +780,101 @@ las $32$.}
 \label{tab:grid-xgb}
 \end{table}
 
+% ###########################################################################
+\subsection{Valoración}
+
+La valoración presenta el rendimiento de los modelos ajustados sobre el conjunto de test. Cada modelo
+se evalúa una sola vez, con el umbral de decisión fijado en entrenamiento por el índice de Youden;
+conviene por tanto explicar antes ese umbral.
+
+El tercer problema es propio del desbalance de nuestra base. El modelo produce un \emph{score} continuo por
+respuesta, y el \textbf{umbral} es el corte que lo convierte en decisión: se considera alucinación si el \emph{score} lo supera. Moverlo desliza el \emph{trade-off} entre precisión y recall, bajarlo captura más alucinaciones a
+costa de más falsas alarmas (Figura~\ref{fig:umbral-esq}a). Como la prevalencia de alucinaciones difiere por tarea, el corte óptimo es distinto en cada una: donde la alucinación es rara
+(QA, Summary) conviene bajar el umbral para no dejarla pasar (Figura~\ref{fig:umbral-esq}b).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{concept_umbral}
+\caption{(a) El umbral separa las dos clases sobre el score; moverlo intercambia falsos negativos
+por falsos positivos. (b) Cada tarea opera a una prevalencia distinta, así que su corte óptimo
+también es distinto.}
+\label{fig:umbral-esq}
+\end{figure}
+
+La Figura~\ref{fig:umbral} compara tres criterios para fijar el umbral, todos ajustados en entrenamiento y aplicados al test: el índice de Youden global, el máximo de F1 por tarea y el máximo de $F_2$ por tarea. Si fijamos el umbral por tarea recuperamos falsos
+negativos que el umbral global deja pasar, a costa de perder precisión. Pasamos de 285 falsos negativos a 125.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\textwidth]{desb_barrido_umbral}\caption{Métricas frente al umbral (OOF).}\end{subfigure}\hfill
+\begin{subfigure}{0.49\textwidth}\includegraphics[width=\textwidth]{desb_estrategias_umbral}\caption{Estrategias de umbral por tarea (test).}\end{subfigure}
+\caption{Efecto del umbral de decisión. Precisión, recall y F1 al mover el
+umbral (a). Las tres estrategias de umbral por tarea sobre el test (b).}
+\label{fig:umbral}
+\end{figure}
+
+Con el umbral de Youden fijado en entrenamiento, el Cuadro correspondiente a cada modelo recoge sus
+métricas sobre el test.
+
+\textbf{Regresión logística.} Es el modelo más débil: su AUC ($0{,}798$) es el único que no llega a $0{,}80$, coherente con que solo puede trazar fronteras lineales.
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lc}
+\toprule
+Regresión logística & \\
+\midrule
+Precisión & 0,594 \\
+\emph{Recall} & 0,726 \\
+Valor F1 & 0,654 \\
+Accuracy & 0,731 \\
+AUC & 0,798 \\
+\bottomrule
+\end{tabular}
+\caption{Precisión, \emph{recall}, F1 y AUC de la regresión logística en el test.}
+\label{tab:met-lr}
+\end{table}
+
+\textbf{KNN.} Separa razonablemente bien (AUC $0{,}826$), aunque no destaca en precisión ni en recall.
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lc}
+\toprule
+KNN & \\
+\midrule
+Precisión & 0,646 \\
+\emph{Recall} & 0,695 \\
+Valor F1 & 0,669 \\
+Accuracy & 0,760 \\
+AUC & 0,826 \\
+\bottomrule
+\end{tabular}
+\caption{Precisión, \emph{recall}, F1 y AUC de KNN en el test.}
+\label{tab:met-knn}
+\end{table}
+
+\textbf{Bosque aleatorio.} Alcanza un AUC de $0{,}833$, de los más altos.
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lc}
+\toprule
+Bosque aleatorio & \\
+\midrule
+Precisión & 0,656 \\
+\emph{Recall} & 0,699 \\
+Valor F1 & 0,677 \\
+Accuracy & 0,767 \\
+AUC & 0,833 \\
+\bottomrule
+\end{tabular}
+\caption{Precisión, \emph{recall}, F1 y AUC del bosque aleatorio en el test.}
+\label{tab:met-rf}
+\end{table}
+
+\textbf{Gradient boosting (XGBoost).} Obtiene el mejor AUC de los cuatro modelos, $0{,}837$.
+
 \begin{table}[H]
 \centering\small
 \begin{tabular}{lc}
@@ -1035,23 +882,26 @@ las $32$.}
 XGBoost & \\
 \midrule
 Precisión & 0,673 \\
-Exhaustividad (recall) & 0,698 \\
+\emph{Recall} & 0,698 \\
 Valor F1 & 0,685 \\
 Accuracy & 0,776 \\
 AUC & 0,837 \\
 \bottomrule
 \end{tabular}
-\caption{Precisión, exhaustividad, F1 y AUC de XGBoost en el test.}
+\caption{Precisión, \emph{recall}, F1 y AUC de XGBoost en el test.}
 \label{tab:met-xgb}
 \end{table}
 
+% ###########################################################################
+\section{Discusión}
+\label{sec:sota}
 
-\subsection{Conclusiones de la evaluación de modelos. Modelo ganador}
+\subsection{Conclusiones de la evaluación. Modelo ganador}
 \label{sec:winner}
 
 Para elegir el mejor modelo usamos como criterio el promedio entre F1 y AUC, que equilibra
-la separación pura (AUC) con el equilibrio entre precisión y exhaustividad y por tanto el rendimiento al umbral (F1). El Cuadro~\ref{tab:modelos}
-recoge las métricas de los cinco modelos. Las diferencias son pequeñas y todos poseen un AUC en torno a $0{,}80$.
+la separación pura (AUC) con el equilibrio entre precisión y \emph{recall} y por tanto el rendimiento al umbral (F1). El Cuadro~\ref{tab:modelos}
+recoge las métricas de los cuatro modelos. Las diferencias son pequeñas y todos poseen un AUC en torno a $0{,}80$.
 
 \begin{table}[H]
 \centering
@@ -1062,24 +912,24 @@ Modelo & AUC & F1 & precisión & recall & accuracy & bal-acc & prom.\ F1--AUC \\
 \midrule
 \textbf{XGBoost} & \textbf{0,837} & 0,685 & 0,673 & 0,698 & 0,776 & 0,758 & \textbf{0,761} \\
 Bosque aleatorio & 0,833 & 0,677 & 0,656 & 0,699 & 0,767 & 0,751 & 0,755 \\
-SVM & 0,819 & 0,685 & 0,670 & 0,701 & 0,775 & 0,758 & 0,752 \\
 KNN & 0,826 & 0,669 & 0,646 & 0,695 & 0,760 & 0,745 & 0,748 \\
 Reg.\ logística & 0,798 & 0,654 & 0,594 & 0,726 & 0,731 & 0,730 & 0,726 \\
 \bottomrule
 \end{tabular}
-\caption{Comparación de los cinco modelos en el test (once variables, umbral de
+\caption{Comparación de los cuatro modelos en el test (once variables, umbral de
 Youden fijado en entrenamiento). Ganador por promedio F1--AUC: XGBoost.}
 \label{tab:modelos}
 \end{table}
 
-XGBoost separa mejor las clases y la SVM rinde algo mejor al fijar el umbral, de modo que el
-promedio de AUC y F1 decide a favor de XGBoost. Los cinco modelos, en todo caso, quedan muy cerca.
+XGBoost tiene el mejor AUC y un F1 competitivo, de modo que el promedio de AUC y F1 lo sitúa primero.
+Los cuatro modelos, en todo caso, quedan muy cerca.
 
-La diferencia está en cómo reparte cada uno la precisión y el recall. La SVM casi no se equivoca
-cuando predice alucinación, pero es la que más deja escapar. El bosque aleatorio y la regresión
-logística hacen lo contrario: detectan más alucinaciones a cambio de más falsas alarmas. XGBoost
-es el más equilibrado de los cinco. Como una alucinación no detectada es el error caro, ese mayor
-recall inclina la balanza hacia los modelos de árbol. La regresión logística, además, es la única
+La diferencia está en cómo reparte cada uno la precisión y el recall. El bosque aleatorio y la regresión
+logística detectan más alucinaciones a cambio de más falsas alarmas: mayor recall, menor precisión.
+XGBoost es el más equilibrado de los cuatro. En detección de alucinaciones, el falso negativo —una invención
+que pasa como fiable y llega al usuario sin control— cuesta más que la falsa alarma, que solo obliga a
+una revisión; por eso el recall es la métrica que prima, y ese mayor recall inclina la balanza hacia
+los modelos de árbol. La regresión logística, además, es la única
 que no llega a un AUC de $0{,}80$: su frontera lineal se queda corta donde el resto, no lineales,
 sí llegan.
 
@@ -1087,14 +937,14 @@ sí llegan.
 \centering
 \begin{subfigure}{0.49\textwidth}\includegraphics[width=\textwidth]{roc_test_rfe}\caption{Curvas ROC.}\end{subfigure}\hfill
 \begin{subfigure}{0.49\textwidth}\includegraphics[width=\textwidth]{pr_test_rfe}\caption{Curvas precisión-recall.}\end{subfigure}
-\caption{Métricas de evaluación de los cinco modelos sobre el test.}
+\caption{Métricas de evaluación de los cuatro modelos sobre el test.}
 \label{fig:roc-all}
 \end{figure}
 
 El AUC global de XGBoost ($0{,}837$) promedia tres tareas con una distribución de la variable respuesta muy dispar. El desglose
 por tarea de la siguiente tabla separa dónde el detector rinde bien y dónde falla sistemáticamente.
 El umbral por tarea recorta los falsos negativos de $285$ a $125$, sobre todo en Summary
-($146\to46$) y QA ($76\to27$) a costa de precisión la accuracy y el F1 agregados bajan.
+($146\to46$) y QA ($76\to27$); a costa de ello, la precisión, la \emph{accuracy} y el F1 agregados bajan.
 
 \begin{table}[H]
 \centering
@@ -1128,10 +978,11 @@ justo los tramos de mayor solape con la fuente: ninguna característica léxica 
 \label{fig:err}
 \end{figure}
 
-QA plantea el problema contrario: discrimina bien con un AUC $0{,}82$, pero su baja prevalencia hace
-que un umbral global calle los positivos y hunda el recall. Ordena bien, pero al umbral global no
-caza las suficientes alucinaciones. La Figura~\ref{fig:pr-op} pone precio a ese compromiso: exigir un recall del
-$80\,\%$ apenas cuesta precisión en Data2txt y la desploma en QA y Summary.
+QA plantea el problema contrario: discrimina bien (AUC $0{,}82$), pero su baja prevalencia hace que un
+umbral global resulte demasiado exigente y reduzca el recall, dejando sin detectar buena parte de las
+alucinaciones pese a ordenarlas correctamente. La Figura~\ref{fig:pr-op} cuantifica ese compromiso:
+exigir un recall del $80\,\%$ apenas cuesta precisión en Data2txt, pero la reduce drásticamente en QA y
+Summary.
 
 \begin{figure}[H]
 \centering
@@ -1143,9 +994,9 @@ $80\,\%$ apenas cuesta precisión en Data2txt y la desploma en QA y Summary.
 \label{fig:pr-op}
 \end{figure}
 
-La solución está en fijar el umbral por tarea, reconociendo así la distinta
-prevalencia de cada una: con ello los falsos negativos totales bajan de $285$ a $125$, sube el
-recall de QA y mejora el F1 de Summary. Las matrices de confusión por tarea de la Figura~\ref{fig:conf} muestran cómo bajo el umbral por tarea, la celda de falsos negativos (las alucinaciones que el modelo no detecta) encoge en QA y Summary frente al umbral global.
+La solución está en fijar un umbral por tarea —el que maximiza el F1 de cada tarea sobre el
+entrenamiento, no el de Youden global—, reconociendo así su distinta prevalencia: con ello los falsos
+negativos totales bajan de $285$ a $125$, sube el recall de QA y mejora el F1 de Summary. Las matrices de confusión por tarea de la Figura~\ref{fig:conf} muestran cómo bajo el umbral por tarea, la celda de falsos negativos (las alucinaciones que el modelo no detecta) encoge en QA y Summary frente al umbral global.
 
 \begin{figure}[H]
 \centering
@@ -1155,13 +1006,9 @@ inferior: umbral por tarea. La detección de alucinaciones (VP) crece en QA y Su
 \label{fig:conf}
 \end{figure}
 
-% ###########################################################################
-% 7. COMPARACIÓN CON EL ESTADO DEL ARTE
-% ###########################################################################
-\section{Comparación con el estado del arte}
-\label{sec:sota}
+\subsection{Comparación con el estado del arte}
 
-\subsection{Los métodos de referencia}
+\subsubsection{Los métodos de referencia}
 
 El estado del arte sobre RAGTruth es enteramente neuronal y se agrupa en tres familias:
 \begin{itemize}
@@ -1265,3 +1112,4 @@ es común a todos: Data2txt fácil, QA y Summary mucho más difíciles. Al final
 \bibliography{referencias}
 
 \end{document}
+
