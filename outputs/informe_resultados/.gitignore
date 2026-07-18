@@ -9,3 +9,14 @@
 *.blg
 *.synctex.gz
 compile.log
+
+# Intermedios y borradores (no versionar)
+_cuerpo_*.tex
+informe_completo.pdf
+informe_unificado.pdf
+*copia*.pdf
+marco_teorico_v*.pdf
+marco_teorico_[0-9]*.pdf
+resultados.txt
+resultados_revisado.tex
+.claude/
