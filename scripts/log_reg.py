@@ -27,9 +27,9 @@ from ragcheck.training import (  # noqa: E402
 
 NAME = "logreg"
 PARAM_GRID = {
-    "C": [0.01, 0.1, 1.0, 10.0],
-    "class_weight": [None, "balanced"],
-    "solver": ["lbfgs", "liblinear"],
+    "logisticregression__C": [0.01, 0.1, 1.0, 10.0, 100.0],
+    "logisticregression__penalty": ["l1", "l2"],
+    "logisticregression__class_weight": [None, "balanced"],
 }
 
 

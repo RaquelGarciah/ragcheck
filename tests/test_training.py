@@ -18,15 +18,15 @@ def _datos():
 
 def test_grid_search_encuentra_mejor_y_reajusta():
     X, y, g = _datos()
-    gs = grid_search(build_logreg(), {"C": [0.01, 1.0, 100.0]}, X, y, g)
-    assert gs.best_params_["C"] in (0.01, 1.0, 100.0)
+    gs = grid_search(build_logreg(), {"logisticregression__C": [0.01, 1.0, 100.0]}, X, y, g)
+    assert gs.best_params_["logisticregression__C"] in (0.01, 1.0, 100.0)
     # El best_estimator_ queda reentrenado y predice.
     assert gs.best_estimator_.predict_proba(X).shape == (len(y), 2)
 
 
 def test_top_configs_ordena_por_score():
     X, y, g = _datos()
-    gs = grid_search(build_logreg(), {"C": [0.01, 1.0, 100.0]}, X, y, g)
+    gs = grid_search(build_logreg(), {"logisticregression__C": [0.01, 1.0, 100.0]}, X, y, g)
     top = top_configs(gs, k=3)
     assert len(top) == 3
     assert top["mean_test_score"].is_monotonic_decreasing

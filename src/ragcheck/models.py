@@ -21,9 +21,19 @@ from ragcheck.config import (
 )
 
 
-def build_logreg() -> LogisticRegression:
-    """Regresión logística (Cox, 1958). Interpretable por sus coeficientes."""
-    return LogisticRegression(**LOGREG_PARAMS)
+def build_logreg() -> Pipeline:
+    """Regresión logística (Cox, 1958) con estandarizado previo.
+
+    El escalado es necesario porque la regularización penaliza el tamaño del
+    coeficiente, que depende de la escala de la variable: sin estandarizar,
+    `answer_len` (cientos de tokens) se penaliza mucho menos que las features en
+    [0, 1], y el modelo cambiaría con las unidades. Con `StandardScaler` el
+    castigo compara los coeficientes en igualdad.
+    """
+    return make_pipeline(
+        StandardScaler(),
+        LogisticRegression(solver="liblinear", **LOGREG_PARAMS),
+    )
 
 
 def build_xgboost() -> XGBClassifier:
