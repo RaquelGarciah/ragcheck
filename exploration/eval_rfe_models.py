@@ -25,7 +25,7 @@ from ragcheck.config import REPORTS_DIR  # noqa: E402
 from ragcheck.data import load_ragtruth  # noqa: E402
 from ragcheck.features import extract_features  # noqa: E402
 from ragcheck.models import (  # noqa: E402
-    build_knn, build_logreg, build_random_forest, build_svm, build_xgboost,
+    build_knn, build_logreg, build_random_forest, build_xgboost,
 )
 from ragcheck.plotting import savefig, set_style  # noqa: E402
 from ragcheck.training import cross_validate, grid_search  # noqa: E402
@@ -36,10 +36,11 @@ CHOSEN = ["containment", "task_QA", "task_Summary", "task_Data2txt", "num_contex
 
 # Rejillas modestas por modelo (GroupKFold, F1). SVM se busca sobre submuestra.
 GRIDS = {
-    "logreg": (build_logreg, {"C": [0.3, 1.0, 3.0], "class_weight": [None, "balanced"]}),
+    "logreg": (build_logreg, {"logisticregression__C": [0.01, 0.1, 1.0, 10.0, 100.0],
+                              "logisticregression__penalty": ["l1", "l2"],
+                              "logisticregression__class_weight": [None, "balanced"]}),
     "knn": (build_knn, {"kneighborsclassifier__n_neighbors": [11, 15, 25],
                         "kneighborsclassifier__weights": ["uniform", "distance"]}),
-    "svm": (build_svm, {"svc__C": [1.0, 10.0], "svc__gamma": ["scale"]}),
     "random_forest": (build_random_forest, {"max_depth": [None, 12, 20]}),
     "xgboost": (build_xgboost, {"max_depth": [3, 4, 6], "learning_rate": [0.05, 0.1]}),
 }

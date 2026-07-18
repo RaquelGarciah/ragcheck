@@ -35,7 +35,7 @@ WIN = {"max_depth": 6, "learning_rate": 0.05}
 
 def eda_global(tr, te):
     """Panel (a) longitud de respuesta global; (b) nº de ejemplos por tarea train/test."""
-    length = tr["output"].str.split().str.len()
+    length = tr["response"].str.split().str.len()
     fig, axes = plt.subplots(1, 2, figsize=(9, 3.6))
     sns.histplot(length[length < length.quantile(0.99)], bins=40, ax=axes[0], color=CB[0])
     axes[0].set(xlabel="longitud de la respuesta (tokens)", ylabel="nº respuestas",
@@ -63,11 +63,11 @@ def pr_operacion(yte, task_te, pte):
         ax.axhline(yte[m].mean(), color=TCOL[k], ls=":", lw=1)
         prec80[k] = float(pr[rc >= 0.80].max())
     ax.axvline(0.80, color="grey", ls="--", lw=1.2)
-    ax.text(0.805, 0.05, "recall = 0,80", fontsize=8, color="grey", rotation=90)
+    ax.text(0.805, 0.05, "cobertura = 0,80", fontsize=8, color="grey", rotation=90)
     for k in TASKS:
         ax.plot(0.80, prec80[k], "o", color=TCOL[k], ms=7, mec="black")
-    ax.set(xlabel="recall", ylabel="precisión", xlim=(0, 1), ylim=(0, 1),
-           title="Curvas precisión-recall por tarea (test, modelo ganador)")
+    ax.set(xlabel="cobertura", ylabel="precisión", xlim=(0, 1), ylim=(0, 1),
+           title="Curvas precisión-cobertura por tarea (test, modelo ganador)")
     ax.legend(title="tarea", loc="upper right", fontsize=9)
     savefig(fig, "pr_operacion_por_tarea")
     return prec80
@@ -91,8 +91,8 @@ def main():
 
     print("\n=== Candidatos de par real Data2txt (train) ===")
     d = tr[tr["task_type"] == "Data2txt"].copy()
-    d["rlen"] = d["output"].str.split().str.len()
-    d["slen"] = d["context"].str.split().str.len()
+    d["rlen"] = d["response"].str.split().str.len()
+    d["slen"] = d["source"].str.split().str.len()
     # Cortos, para que quepan en la tabla.
     for lab in (0, 1):
         cand = d[(d["label"] == lab) & (d["rlen"].between(20, 45)) & (d["slen"] < 80)].head(3)

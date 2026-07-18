@@ -23,12 +23,12 @@ from ragcheck import evaluate as ev  # noqa: E402
 from ragcheck.data import load_ragtruth  # noqa: E402
 from ragcheck.features import extract_features  # noqa: E402
 from ragcheck.models import (  # noqa: E402
-    build_knn, build_logreg, build_random_forest, build_svm, build_xgboost)
+    build_knn, build_logreg, build_random_forest, build_xgboost)
 from ragcheck.plotting import savefig, set_style  # noqa: E402
 from ragcheck.training import cross_validate  # noqa: E402
 
 METRICS = ["acc", "f1", "recall", "precision", "auc", "bal_acc"]
-LABELS = {"acc": "accuracy", "f1": "F1", "recall": "recall",
+LABELS = {"acc": "accuracy", "f1": "F1", "recall": "cobertura",
           "precision": "precisión", "auc": "AUC", "bal_acc": "bal-acc"}
 
 
@@ -44,18 +44,16 @@ def oof(cols, X, y, g):
 def generaliza(ranking, X, y, g):
     """¿El orden RFE (de xgboost) generaliza a los otros modelos?
 
-    Para logreg, KNN, SVM y bosque aleatorio traza AUC, accuracy y F1 (OOF,
+    Para logreg, KNN y bosque aleatorio traza AUC, accuracy y F1 (OOF,
     GroupKFold) frente al número de variables añadidas en orden RFE. Si todos se
     aplanan hacia el mismo tamaño, la selección no es específica de xgboost.
     """
     builders = {"reg. logística": build_logreg, "KNN": build_knn,
-                "SVM": build_svm, "bosque aleatorio": build_random_forest}
+                "bosque aleatorio": build_random_forest}
     ks = list(range(1, len(ranking) + 1))
-    rng = np.random.default_rng(SEED)
-    sub = rng.choice(len(y), 5000, replace=False)  # SVM es caro: submuestra
     curves = {}
     for name, build in builders.items():
-        Xe, ye, ge = (X.iloc[sub], y[sub], g[sub]) if name == "SVM" else (X, y, g)
+        Xe, ye, ge = X, y, g
         rows = []
         for k in ks:
             p = cross_validate(build(), Xe[ranking[:k]], ye, ge)["y_prob"]
@@ -83,7 +81,7 @@ def generaliza(ranking, X, y, g):
 
 def main():
     df = load_ragtruth("train")
-    X, y, g = extract_features(df), df["label"].values, df["context"].values
+    X, y, g = extract_features(df), df["label"].values, df["source"].values
 
     # Ranking RFE: elimina recursivamente la menos importante (xgboost).
     cur, dropped = list(X.columns), []

@@ -66,7 +66,7 @@ def main():
     tr, te = load_ragtruth("train"), load_ragtruth("test")
     Xtr, Xte = extract_features(tr)[CHOSEN], extract_features(te)[CHOSEN]
     ytr, yte = tr["label"].values, te["label"].values
-    g, task_tr, task_te = tr["context"].values, tr["task_type"].values, te["task_type"].values
+    g, task_tr, task_te = tr["source"].values, tr["task_type"].values, te["task_type"].values
 
     ptr = cross_validate(win_xgb(), Xtr, ytr, g)["y_prob"]
     pte = win_xgb().fit(Xtr, ytr).predict_proba(Xte)[:, 1]
@@ -77,13 +77,14 @@ def main():
     # --- barrido de umbral (OOF) ---
     grid = np.linspace(0.05, 0.95, 91)
     fig, ax = plt.subplots(figsize=(6.5, 4))
-    for name in ("precision", "recall", "F1", "bal_acc"):
+    for key, lab in (("precision", "precisión"), ("recall", "cobertura"),
+                     ("F1", "F1"), ("bal_acc", "bal-acc")):
         ys = []
         for t in grid:
             m = ev.threshold_metrics(ytr, ptr, t)
-            ys.append(m[name.lower()] if name != "bal_acc"
+            ys.append(m[key.lower()] if key != "bal_acc"
                       else ev.balanced_metrics(ytr, ptr, t)["balanced_accuracy"])
-        ax.plot(grid, ys, lw=2, label=name)
+        ax.plot(grid, ys, lw=2, label=lab)
     ax.axvline(t_glob, color="grey", ls="--", lw=1)
     ax.set(xlabel="umbral de decisión", ylabel="valor", ylim=(0, 1),
            title="Barrido de umbral (XGBoost, 11 vars, OOF)")
@@ -103,7 +104,7 @@ def main():
         pred = predict(thr)
         for k in TASKS:
             m = task_te == k; mm = metrics(yte[m], pred[m])
-            for mk, ml in [("recall", "recall"), ("prec", "precisión"), ("f1", "F1")]:
+            for mk, ml in [("recall", "cobertura"), ("prec", "precisión"), ("f1", "F1")]:
                 rows.append({"estrategia": sname, "tarea": k, "métrica": ml, "valor": mm[mk]})
     d = pd.DataFrame(rows)
     gg = sns.catplot(d, x="tarea", y="valor", hue="estrategia", col="métrica",
@@ -149,7 +150,7 @@ def main():
                      label=f"{k} ({average_precision_score(yte[m], pte[m]):.2f})")
     axes[0].plot([0, 1], [0, 1], "k--", lw=1)
     axes[0].set(xlabel="RFP", ylabel="RVP", title="ROC por tarea"); axes[0].legend(fontsize=8)
-    axes[1].set(xlabel="recall", ylabel="precisión", title="PR por tarea"); axes[1].legend(fontsize=8)
+    axes[1].set(xlabel="cobertura", ylabel="precisión", title="PR por tarea"); axes[1].legend(fontsize=8)
     fig.tight_layout(); savefig(fig, "eval_roc_pr_por_tarea")
 
     # --- calibración ---

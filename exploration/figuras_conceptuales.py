@@ -145,7 +145,7 @@ def umbral():
     ax.text(0.62, max(limpia) * 0.12, "FP", color=CB[0], fontsize=8, weight="bold")
     ax.annotate("", xy=(0.28, -0.6), xytext=(0.72, -0.6),
                 arrowprops=dict(arrowstyle="<->", lw=1.2), annotation_clip=False)
-    ax.text(0.30, -1.35, "más recall", fontsize=8, clip_on=False)
+    ax.text(0.30, -1.35, "más cobertura", fontsize=8, clip_on=False)
     ax.text(0.58, -1.35, "más precisión", fontsize=8, clip_on=False)
     ax.set(xlim=(0, 1), xlabel="score del modelo", yticks=[],
            title="(a) El umbral separa limpia de alucina")
